@@ -69,7 +69,56 @@
       }
     }
 
+    if (player.handName) {
+      const handName = document.createElement("div");
+      handName.className = "role";
+      handName.textContent = player.handName;
+      el.appendChild(handName);
+    }
+
     return el;
+  }
+
+  function renderResults(results) {
+    const section = $("results");
+    const winnerText = $("winnerText");
+    const rankingList = $("rankingList");
+
+    if (!results) {
+      section.classList.add("hidden");
+      winnerText.textContent = "";
+      rankingList.innerHTML = "";
+      return;
+    }
+
+    section.classList.remove("hidden");
+    winnerText.textContent = results.winnerNames.length > 1
+      ? "Hasil seri: " + results.winnerNames.join(", ")
+      : "Pemenang: " + results.winnerNames[0];
+
+    rankingList.innerHTML = "";
+
+    results.players.forEach((player, index) => {
+      const row = document.createElement("div");
+      row.className = "result-row";
+
+      const name = document.createElement("strong");
+      name.textContent = (index + 1) + ". " + player.name;
+
+      const hand = document.createElement("span");
+      hand.textContent = player.handName;
+
+      row.append(name, hand);
+
+      if (player.winner) {
+        row.classList.add("result-winner");
+        const badge = document.createElement("b");
+        badge.textContent = "PEMENANG";
+        row.appendChild(badge);
+      }
+
+      rankingList.appendChild(row);
+    });
   }
 
   if (typeof window.io !== "function") {
@@ -167,6 +216,7 @@
     });
 
     renderCards($("communityCards"), room.community);
+    renderResults(room.results);
 
     const stage = room.stage;
     const canControl = isDealer;
@@ -177,28 +227,23 @@
     );
 
     $("flop").classList.toggle(
-      "hidden",
-      !canControl || stage !== "preflop"
+      "hidden", !canControl || stage !== "preflop"
     );
 
     $("turn").classList.toggle(
-      "hidden",
-      !canControl || stage !== "flop"
+      "hidden", !canControl || stage !== "flop"
     );
 
     $("river").classList.toggle(
-      "hidden",
-      !canControl || stage !== "turn"
+      "hidden", !canControl || stage !== "turn"
     );
 
     $("showdown").classList.toggle(
-      "hidden",
-      !canControl || stage !== "river"
+      "hidden", !canControl || stage !== "river"
     );
 
     $("next").classList.toggle(
-      "hidden",
-      !canControl || stage !== "showdown"
+      "hidden", !canControl || stage !== "showdown"
     );
   });
 })();
