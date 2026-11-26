@@ -1,5 +1,4 @@
 
-
 (() => {
   "use strict";
 
@@ -13,6 +12,11 @@
   let topupPlayerId = null;
   let lastRoom = null;
   let lastWinnerKey = "";
+
+  // Mencegah kartu meja dan kartu pribadi dirender ulang
+  // jika susunan kartunya tidak berubah.
+  let lastCommunityHTML = "";
+  let lastHandHTML = "";
 
   function visible(id, show) {
     const el = $(id);
@@ -63,8 +67,6 @@
     socket.on("connected", data => {
       myId = data.id;
 
-      // Jika room update datang lebih dahulu,
-      // render ulang setelah ID pemain diketahui.
       if (lastRoom) {
         renderRoom(lastRoom);
       }
@@ -95,6 +97,8 @@
       isDealer = !!data.isDealer;
       isAI = !!data.aiMode;
       lastWinnerKey = "";
+      lastCommunityHTML = "";
+      lastHandHTML = "";
 
       if ($("roomCode")) {
         $("roomCode").textContent = roomCode;
@@ -380,6 +384,10 @@
           ${player.chips} chip
         </div>
 
+        <div class="player-topup-count">
+          Top up: ${player.topupsUsed || 0}/3
+        </div>
+
         ${
           player.bet > 0
             ? `<div class="player-bet">Bet: ${player.bet}</div>`
@@ -404,43 +412,29 @@
     const target = $("communityCards");
     if (!target) return;
 
-    target.innerHTML = "";
+    let html = "";
 
     if (room.phase === "waiting") {
-      target.innerHTML =
+      html =
         '<span class="placeholder">Menunggu kartu meja</span>';
-      return;
+    } else {
+      (room.community || []).forEach(card => {
+        html += cardHTML(card);
+      });
+
+      for (
+        let i = room.community.length;
+        i < 5;
+        i++
+      ) {
+        html += '<div class="card card-empty"></div>';
+      }
     }
 
-    (room.community || []).forEach(
-      (card, index) => {
-        target.insertAdjacentHTML(
-          "beforeend",
-          cardHTML(card)
-        );
-
-        const lastCard = target.lastElementChild;
-
-        if (lastCard) {
-          lastCard.classList.add("community-deal");
-
-          lastCard.style.setProperty(
-            "--deal-delay",
-            `${index * 130}ms`
-          );
-        }
-      }
-    );
-
-    for (
-      let i = room.community.length;
-      i < 5;
-      i++
-    ) {
-      target.insertAdjacentHTML(
-        "beforeend",
-        '<div class="card card-empty"></div>'
-      );
+    // Tidak mengganti elemen jika kartunya sama.
+    if (html !== lastCommunityHTML) {
+      target.innerHTML = html;
+      lastCommunityHTML = html;
     }
   }
 
@@ -452,31 +446,20 @@
       player => player.id === myId
     );
 
+    let html = "";
+
     if (!me || !me.hand?.length) {
-      target.innerHTML =
+      html =
         '<span class="placeholder">Menunggu pembagian kartu</span>';
-      return;
+    } else {
+      html = me.hand.map(cardHTML).join("");
     }
 
-    target.innerHTML = "";
-
-    me.hand.forEach((card, index) => {
-      target.insertAdjacentHTML(
-        "beforeend",
-        cardHTML(card)
-      );
-
-      const element = target.lastElementChild;
-
-      if (element) {
-        element.classList.add("private-deal");
-
-        element.style.setProperty(
-          "--deal-delay",
-          `${index * 160}ms`
-        );
-      }
-    });
+    // Kartu pribadi hanya dirender ulang jika berubah.
+    if (html !== lastHandHTML) {
+      target.innerHTML = html;
+      lastHandHTML = html;
+    }
   }
 
   function renderPot(room) {
@@ -598,7 +581,7 @@
       row.className = "dealer-player-row";
 
       row.textContent =
-        `${player.name}${player.isAI ? " (AI)" : ""} — ${player.chips} chip`;
+        `${player.name}${player.isAI ? " (AI)" : ""} — ${player.chips} chip — Top up ${player.topupsUsed || 0}/3`;
 
       target.appendChild(row);
     });
@@ -681,15 +664,8 @@
       player => player.id === myId
     );
 
-    visible(
-      "topupControls",
-      !!me &&
-      me.chips <= 0 &&
-      (
-        room.phase === "waiting" ||
-        room.phase === "showdown"
-      )
-    );
+    // Top up sudah otomatis, tombol manual disembunyikan.
+    visible("topupControls", false);
 
     const hasControl = isDealer || isAI;
 
@@ -711,10 +687,7 @@
     visible("dealerPanel", hasControl);
 
     if (isAI && $("startRound")) {
-      $("startRound").textContent =
-        room.phase === "showdown"
-          ? "MULAI RONDE"
-          : "MULAI RONDE";
+      $("startRound").textContent = "MULAI RONDE";
     }
   }
 
@@ -864,6 +837,8 @@
 
       visible("winnerPopup", false);
       lastWinnerKey = "";
+      lastCommunityHTML = "";
+      lastHandHTML = "";
     });
 
     bind("fold", "click", () => {
@@ -956,3 +931,4 @@
     init();
   }
 })();
+
