@@ -1,5 +1,4 @@
 
-
 "use strict";
 
 const express = require("express");
@@ -102,7 +101,9 @@ function publicPlayer(p) {
     allIn: p.allIn,
     isAI: !!p.isAI,
     isDealer: false,
-    isTurn: false
+    isTurn: false,
+    topupsUsed: p.topupsUsed || 0,
+    topupsRemaining: Math.max(0, 3 - (p.topupsUsed || 0))
   };
 }
 
@@ -140,7 +141,9 @@ function roomSnapshot(room, viewerId) {
       hand: viewer.hand,
       bet: viewer.bet,
       folded: viewer.folded,
-      allIn: viewer.allIn
+      allIn: viewer.allIn,
+      topupsUsed: viewer.topupsUsed || 0,
+      topupsRemaining: Math.max(0, 3 - (viewer.topupsUsed || 0))
     } : null,
 
     results: room.results || []
@@ -240,8 +243,65 @@ function createPlayer(id, name, isAI = false) {
     folded: false,
     allIn: false,
     acted: false,
-    isAI
+    isAI,
+
+    // Jatah auto top up berlaku selama berada di room.
+    topupsUsed: 0,
+    topupExhaustedNotified: false
   };
+}
+
+// AUTO TOP UP: 10 CHIP, MAKSIMAL 3 KALI
+function autoTopUp(room) {
+  room.players.forEach(player => {
+    if (player.chips > 0) return;
+
+    if (player.topupsUsed < 3) {
+      player.chips += 10;
+      player.topupsUsed++;
+
+      player.allIn = false;
+      player.folded = false;
+      player.acted = false;
+
+      const message =
+        `Auto top up disetujui: ${player.name} menerima 10 chip virtual. ` +
+        `Sisa kesempatan: ${3 - player.topupsUsed}/3.`;
+
+      if (!player.isAI) {
+        io.to(player.id).emit("toast", message);
+      }
+
+      if (!room.aiMode && room.dealerId) {
+        io.to(room.dealerId).emit(
+          "toast",
+          `Auto top up ${player.name} disetujui otomatis.`
+        );
+      }
+
+      if (room.aiMode && room.hostId) {
+        io.to(room.hostId).emit(
+          "toast",
+          player.isAI
+            ? `AI ${player.name} mendapat auto top up.`
+            : message
+        );
+      }
+
+      player.topupExhaustedNotified = false;
+
+    } else if (
+      !player.topupExhaustedNotified &&
+      !player.isAI
+    ) {
+      io.to(player.id).emit(
+        "toast",
+        "Jatah auto top up kamu sudah habis (3/3)."
+      );
+
+      player.topupExhaustedNotified = true;
+    }
+  });
 }
 
 function startRound(room) {
@@ -303,10 +363,8 @@ function startRound(room) {
     (room.dealerIndex + 1) % active.length;
 
   broadcast(room);
-
   notifyRoom(room, `Ronde ${room.round} dimulai.`);
 
-  // Jika giliran pertama adalah AI, AI langsung bertindak.
   scheduleAI(room, 900);
 }
 
@@ -565,8 +623,11 @@ function finishRound(room) {
   room.turnId = null;
 
   awardPots(room);
-  broadcast(room);
 
+  // Top up dilakukan SETELAH pembagian pot selesai.
+  autoTopUp(room);
+
+  broadcast(room);
   notifyRoom(room, "Ronde selesai. Pemenang telah ditentukan.");
 }
 
@@ -587,6 +648,9 @@ function finishByFold(room) {
   room.phase = "showdown";
   room.started = false;
   room.turnId = null;
+
+  // Top up dilakukan setelah pot diberikan kepada pemenang.
+  autoTopUp(room);
 
   broadcast(room);
   notifyRoom(room, "Ronde selesai.");
@@ -1132,71 +1196,28 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
+  // Top up sekarang otomatis. Permintaan manual tidak menambah chip.
   socket.on("player:topup-request", () => {
     const room = getRoomBySocket(socket.id);
     if (!room) return;
 
     const player = getPlayer(room, socket.id);
+    if (!player) return;
 
-    if (!player || player.chips > 0) return;
-
-    if (room.aiMode && room.hostId === socket.id) {
-      if (
-        room.phase !== "waiting" &&
-        room.phase !== "showdown"
-      ) {
-        socket.emit(
-          "toast",
-          "Tunggu ronde selesai untuk meminta chip."
-        );
-        return;
-      }
-
-      player.chips += 10;
-
-      socket.emit(
-        "toast",
-        "AI Dealer menyetujui 10 chip virtual."
-      );
-
-      broadcast(room);
-      return;
-    }
-
-    if (room.dealerId) {
-      io.to(room.dealerId).emit("topup:request", {
-        id: player.id,
-        name: player.name
-      });
-    }
+    socket.emit(
+      "toast",
+      player.topupsUsed >= 3
+        ? "Jatah auto top up kamu sudah habis."
+        : "Auto top up diproses setelah ronde selesai."
+    );
   });
 
-  socket.on("dealer:topup-approve", data => {
-    const room = getRoomBySocket(socket.id);
-
-    if (
-      !room ||
-      room.aiMode ||
-      room.dealerId !== socket.id
-    ) {
-      return;
-    }
-
-    const player = getPlayer(
-      room,
-      String(data?.id || "")
-    );
-
-    if (!player || player.chips > 0) return;
-
-    player.chips += 10;
-
-    io.to(player.id).emit(
+  // Dealer tidak perlu menyetujui secara manual lagi.
+  socket.on("dealer:topup-approve", () => {
+    socket.emit(
       "toast",
-      "10 chip virtual berhasil ditambahkan."
+      "Top up sekarang disetujui otomatis setelah ronde selesai."
     );
-
-    broadcast(room);
   });
 
   socket.on("disconnect", () => {
