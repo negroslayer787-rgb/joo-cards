@@ -1,83 +1,95 @@
 
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Joo Cards</title>
-  <link rel="stylesheet" href="/style.css?v=20261126">
+  <title>Joo Cards - Texas Hold'em</title>
+  <link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body>
-  <div class="shell">
-    <header>
-      <div class="brand">
-        <span class="mark">J</span>
+<div class="shell">
+  <header>
+    <div class="brand">
+      <span class="mark">J</span>
+      <div>
+        <h1>JOO CARDS</h1>
+        <small>TEXAS HOLD'EM 6-MAX</small>
+      </div>
+    </div>
+    <span id="connection">MENGHUBUNGKAN...</span>
+  </header>
+
+  <main>
+    <section id="lobby" class="panel lobby">
+      <div class="intro">
+        <p class="eyebrow">MULTIPLAYER CARD ROOM</p>
+        <h2>Welcome to<br><em>Joo Cards.</em></h2>
+        <p>Buat room dan bermain bersama teman.</p>
+      </div>
+
+      <div class="entry">
+        <label for="name">Nama pemain</label>
+        <input id="name" maxlength="18" placeholder="Masukkan nama">
+        <button id="create" class="primary">BUAT ROOM</button>
+
+        <div class="or">ATAU GABUNG ROOM</div>
+
+        <input id="code" maxlength="6" placeholder="KODE ROOM">
+        <button id="join" class="secondary">GABUNG ROOM</button>
+      </div>
+    </section>
+
+    <section id="game" class="hidden">
+      <div class="roombar panel">
         <div>
-          <h1>JOO CARDS</h1>
-          <small>MULTIPLAYER CARD ROOM</small>
+          <small>ROOM CODE</small>
+          <strong id="roomCode">------</strong>
+        </div>
+        <button id="copy" class="secondary small">SALIN KODE</button>
+        <div class="round">RONDE <b id="round">1</b></div>
+      </div>
+
+      <div class="table panel">
+        <div class="tabletop">
+          <div class="tablelabel">JOO <span>CARDS</span></div>
+          <div id="status" class="status">Menunggu pemain...</div>
+        </div>
+
+        <h3>PEMAIN</h3>
+        <div id="players" class="players"></div>
+
+        <div class="community">
+          <h3>COMMUNITY CARDS</h3>
+          <div id="communityCards" class="card-area">
+            <span class="placeholder">Belum dibagikan</span>
+          </div>
+        </div>
+
+        <div class="my-hand">
+          <h3>KARTU PRIBADIMU</h3>
+          <div id="myHand" class="card-area">
+            <span class="placeholder">Menunggu pembagian kartu</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="deal" class="primary hidden">BAGIKAN 2 KARTU</button>
+          <button id="next" class="secondary hidden">RONDE BERIKUTNYA</button>
         </div>
       </div>
-      <span id="connection">HTML AKTIF; MENUNGGU APP.JS</span>
-    </header>
+    </section>
+  </main>
 
-    <main>
-      <section id="lobby" class="panel lobby">
-        <div class="intro">
-          <p class="eyebrow">PLAY TOGETHER</p>
-          <h2>Satu meja.<br><em>Banyak cerita.</em></h2>
-          <p>Buat room pribadi dan bagikan kode kepada temanmu.</p>
-        </div>
+  <div id="toast" role="status"></div>
+</div>
 
-        <div class="entry">
-          <label for="name">Nama pemain</label>
-          <input id="name" maxlength="18" placeholder="Masukkan nama">
-
-          <button id="create" class="primary">BUAT ROOM</button>
-
-          <div class="or">ATAU GABUNG ROOM</div>
-
-          <input id="code" maxlength="6" placeholder="KODE ROOM">
-          <button id="join" class="secondary">GABUNG</button>
-        </div>
-      </section>
-
-      <section id="game" class="hidden">
-        <div class="roombar panel">
-          <div>
-            <small>ROOM CODE</small>
-            <strong id="roomCode">------</strong>
-          </div>
-          <button id="copy" class="secondary small">SALIN KODE</button>
-          <div class="round">RONDE <b id="round">1</b></div>
-        </div>
-
-        <div class="table panel">
-          <div class="tabletop">
-            <div class="tablelabel">JOO <span>CARDS</span></div>
-            <div id="status" class="status">Menunggu pemain...</div>
-          </div>
-
-          <div id="players" class="players"></div>
-
-          <div class="controls">
-            <button id="deal" class="primary hidden">BAGIKAN KARTU</button>
-            <button id="reveal" class="secondary hidden">BUKA KARTU</button>
-            <button id="next" class="secondary hidden">RONDE BERIKUTNYA</button>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <div id="toast" role="status"></div>
-  </div>
-
-  <script>
-    document.getElementById("connection").textContent =
-      "HTML AKTIF; MEMUAT APP.JS...";
-  </script>
-
-  <script src="/socket.io/socket.io.js?v=20261126"></script>
-  <script src="/app.js?v=20261126"></script>
+<script>
+document.getElementById("connection").textContent =
+  "MEMUAT SOCKET.IO...";
+</script>
+<script src="/socket.io/socket.io.js?v=3"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>
-
