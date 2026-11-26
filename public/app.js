@@ -1,4 +1,5 @@
 
+    
 (() => {
   const $ = id => document.getElementById(id);
 
@@ -6,29 +7,38 @@
   let isDealer = false;
 
   function connection(message) {
-    const el = $("connection");
-    if (el) el.textContent = message;
+    $("connection").textContent = message;
   }
 
   function toast(message) {
     const el = $("toast");
-    if (!el) return;
-
     el.textContent = message;
     el.classList.add("show");
-
     setTimeout(() => el.classList.remove("show"), 3000);
   }
 
-  function playerName() {
-    return $("name").value.trim().slice(0, 18) || "Pemain";
-  }
+  function renderCards(container, cards) {
+    container.innerHTML = "";
 
-  connection("APP.JS AKTIF; MEMERIKSA SOCKET.IO...");
+    if (!cards || cards.length === 0) {
+      container.innerHTML =
+        '<span class="placeholder">Belum ada kartu</span>';
+      return;
+    }
+
+    cards.forEach(card => {
+      const el = document.createElement("div");
+      el.className = "card " +
+        (["♥", "♦"].includes(card.suit) ? "red" : "");
+
+      el.textContent = card.rank + card.suit;
+      container.appendChild(el);
+    });
+  }
 
   if (typeof window.io !== "function") {
     connection("SOCKET.IO TIDAK TERMUAT");
-    toast("File Socket.IO tidak berhasil dimuat.");
+    toast("Socket.IO tidak berhasil dimuat.");
     return;
   }
 
@@ -38,9 +48,10 @@
     timeout: 10000
   });
 
+  connection("MENGHUBUNGKAN...");
+
   socket.on("connect", () => {
     connection("TERHUBUNG");
-    console.log("Joo Cards connected:", socket.id);
   });
 
   socket.on("disconnect", () => {
@@ -49,28 +60,21 @@
 
   socket.on("connect_error", error => {
     connection("KONEKSI GAGAL");
-    toast("Koneksi gagal: " + error.message);
+    toast(error.message);
   });
 
-  $("create").addEventListener("click", () => {
+  $("create").onclick = () => {
     if (!socket.connected) {
-      toast("Server belum terhubung. Tunggu sebentar.");
+      toast("Server belum terhubung.");
       return;
     }
 
-    socket.timeout(7000).emit(
-      "room:create",
-      { name: playerName() },
-      (error, response) => {
-        if (error) toast("Server tidak merespons.");
-        else if (!response || !response.ok) {
-          toast("Room gagal dibuat.");
-        }
-      }
-    );
-  });
+    socket.emit("room:create", {
+      name: $("name").value.trim() || "Pemain"
+    });
+  };
 
-  $("join").addEventListener("click", () => {
+  $("join").onclick = () => {
     if (!socket.connected) {
       toast("Server belum terhubung.");
       return;
@@ -83,40 +87,23 @@
       return;
     }
 
-    socket.timeout(7000).emit(
-      "room:join",
-      { name: playerName(), code },
-      (error, response) => {
-        if (error) toast("Server tidak merespons.");
-        else if (!response || !response.ok) {
-          toast("Gagal bergabung ke room.");
-        }
-      }
-    );
-  });
+    socket.emit("room:join", {
+      name: $("name").value.trim() || "Pemain",
+      code
+    });
+  };
 
-  $("deal").addEventListener("click", () => {
-    socket.emit("dealer:deal");
-  });
+  $("deal").onclick = () => socket.emit("dealer:deal");
+  $("next").onclick = () => socket.emit("dealer:next");
 
-  $("reveal").addEventListener("click", () => {
-    socket.emit("dealer:reveal");
-  });
-
-  $("next").addEventListener("click", () => {
-    socket.emit("dealer:next");
-  });
-
-  $("copy").addEventListener("click", async () => {
-    if (!currentCode) return;
-
+  $("copy").onclick = async () => {
     try {
       await navigator.clipboard.writeText(currentCode);
-      toast("Kode room berhasil disalin.");
+      toast("Kode room disalin.");
     } catch {
       toast("Kode room: " + currentCode);
     }
-  });
+  };
 
   socket.on("room:joined", data => {
     currentCode = data.code;
@@ -126,16 +113,15 @@
     $("game").classList.remove("hidden");
     $("roomCode").textContent = currentCode;
 
-    toast("Berhasil masuk ke room!");
+    toast("Berhasil masuk room.");
   });
 
-  socket.on("error:notice", message => {
-    toast(message);
-  });
+  socket.on("error:notice", message => toast(message));
 
   socket.on("room:update", room => {
     $("round").textContent = room.round;
     $("status").textContent = room.message;
+
     $("players").innerHTML = "";
 
     room.players.forEach(player => {
@@ -156,35 +142,32 @@
 
       el.append(avatar, name, role);
 
-      if (player.card) {
-        const card = document.createElement("div");
-        card.className = "card " +
-          (["♥", "♦"].includes(player.card.suit) ? "red" : "");
-
-        card.textContent = player.card.rank + player.card.suit;
-        el.append(card);
-      } else if (player.hasCard) {
+      if (player.hasHand) {
         const card = document.createElement("div");
         card.className = "card back";
         card.textContent = "J";
-        el.append(card);
+        el.appendChild(card);
       }
 
-      $("players").append(el);
+      $("players").appendChild(el);
     });
 
-    $("deal").classList.toggle("hidden", !isDealer);
-
-    $("reveal").classList.toggle(
+    $("deal").classList.toggle(
       "hidden",
-      !isDealer ||
-      room.revealed ||
-      !room.players.some(player => player.hasCard)
+      !isDealer || room.dealt || room.players.length < 2
     );
 
     $("next").classList.toggle(
       "hidden",
-      !isDealer || !room.revealed
+      !isDealer || !room.dealt
     );
+  });
+
+  socket.on("hand:update", cards => {
+    renderCards($("myHand"), cards);
+  });
+
+  socket.on("community:update", cards => {
+    renderCards($("communityCards"), cards);
   });
 })();
