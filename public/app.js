@@ -1,20 +1,31 @@
 
 (() => {
+  "use strict";
+
   const $ = id => document.getElementById(id);
 
   let currentCode = "";
   let isDealer = false;
   let mySocketId = null;
-
-  function connection(message) {
-    $("connection").textContent = message;
-  }
+  let joining = false;
 
   function toast(message) {
     const el = $("toast");
     el.textContent = message;
     el.classList.add("show");
-    setTimeout(() => el.classList.remove("show"), 3000);
+
+    setTimeout(() => {
+      el.classList.remove("show");
+    }, 3000);
+  }
+
+  function connection(message) {
+    $("connection").textContent = message;
+  }
+
+  function setLobbyButtons(disabled) {
+    $("create").disabled = disabled;
+    $("join").disabled = disabled;
   }
 
   function renderCards(container, cards) {
@@ -28,8 +39,10 @@
 
     cards.forEach(card => {
       const el = document.createElement("div");
+
       el.className = "card " +
         (["♥", "♦"].includes(card.suit) ? "red" : "");
+
       el.textContent = card.rank + card.suit;
       container.appendChild(el);
     });
@@ -39,8 +52,13 @@
     const el = document.createElement("div");
     el.className = "player";
 
-    if (player.isTurn) el.classList.add("active-turn");
-    if (player.folded) el.classList.add("folded-player");
+    if (player.isTurn) {
+      el.classList.add("active-turn");
+    }
+
+    if (player.folded) {
+      el.classList.add("folded-player");
+    }
 
     const avatar = document.createElement("div");
     avatar.className = "avatar";
@@ -59,8 +77,10 @@
     if (player.publicHand && player.publicHand.length) {
       player.publicHand.forEach(card => {
         const cardEl = document.createElement("div");
+
         cardEl.className = "card " +
           (["♥", "♦"].includes(card.suit) ? "red" : "");
+
         cardEl.textContent = card.rank + card.suit;
         el.appendChild(cardEl);
       });
@@ -79,7 +99,7 @@
     if (player.folded) {
       state.textContent = "FOLD";
     } else if (player.isTurn) {
-      state.textContent = "GILIRANMU";
+      state.textContent = "GILIRAN";
     } else if (player.acted) {
       state.textContent = "SELESAI";
     } else if (player.hasHand) {
@@ -134,6 +154,7 @@
 
         const badge = document.createElement("b");
         badge.textContent = "PEMENANG";
+
         row.appendChild(badge);
       }
 
@@ -142,89 +163,133 @@
   }
 
   if (typeof window.io !== "function") {
-    connection("SOCKET.IO TIDAK TERMUAT");
+    connection("SOCKET.IO GAGAL");
     toast("Socket.IO tidak berhasil dimuat.");
+    setLobbyButtons(true);
     return;
   }
 
   const socket = window.io({
     transports: ["polling"],
     reconnection: true,
-    timeout: 10000
+    reconnectionAttempts: Infinity,
+    timeout: 15000
   });
 
   connection("MENGHUBUNGKAN...");
+  setLobbyButtons(true);
 
   socket.on("connect", () => {
     mySocketId = socket.id;
+    joining = false;
+
     connection("TERHUBUNG");
+    setLobbyButtons(false);
   });
 
   socket.on("disconnect", () => {
+    mySocketId = null;
+    joining = false;
+
     connection("TERPUTUS");
+    setLobbyButtons(true);
   });
 
   socket.on("connect_error", error => {
     connection("KONEKSI GAGAL");
-    toast(error.message);
+    joining = false;
+    setLobbyButtons(true);
+
+    toast("Koneksi gagal: " + error.message);
   });
 
-  $("create").onclick = () => {
+  function enterRoom(eventName, data) {
     if (!socket.connected) {
-      toast("Server belum terhubung.");
+      toast("Server belum terhubung. Tunggu sebentar.");
       return;
     }
 
-    socket.emit("room:create", {
-      name: $("name").value.trim() || "Pemain"
+    if (joining) return;
+
+    joining = true;
+    setLobbyButtons(true);
+
+    socket.emit(eventName, data, response => {
+      if (response && response.ok === false) {
+        joining = false;
+        setLobbyButtons(false);
+      }
     });
-  };
 
-  $("join").onclick = () => {
-    if (!socket.connected) {
-      toast("Server belum terhubung.");
-      return;
-    }
+    setTimeout(() => {
+      if (joining) {
+        joining = false;
+        setLobbyButtons(socket.connected ? false : true);
+      }
+    }, 8000);
+  }
 
+  $("create").addEventListener("click", () => {
+    const name = $("name").value.trim() || "Pemain";
+
+    enterRoom("room:create", { name });
+  });
+
+  $("join").addEventListener("click", () => {
+    const name = $("name").value.trim() || "Pemain";
     const code = $("code").value.trim().toUpperCase();
 
     if (!code) {
-      toast("Masukkan kode room.");
+      toast("Masukkan kode room terlebih dahulu.");
       return;
     }
 
-    socket.emit("room:join", {
-      name: $("name").value.trim() || "Pemain",
-      code
-    });
-  };
+    enterRoom("room:join", { name, code });
+  });
 
-  $("deal").onclick = () => socket.emit("dealer:deal");
-  $("check").onclick = () => socket.emit("player:check");
-  $("fold").onclick = () => socket.emit("player:fold");
-  $("next").onclick = () => socket.emit("dealer:next");
+  $("deal").addEventListener("click", () => {
+    socket.emit("dealer:deal");
+  });
 
-  $("copy").onclick = async () => {
+  $("check").addEventListener("click", () => {
+    socket.emit("player:check");
+  });
+
+  $("fold").addEventListener("click", () => {
+    socket.emit("player:fold");
+  });
+
+  $("next").addEventListener("click", () => {
+    socket.emit("dealer:next");
+  });
+
+  $("copy").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(currentCode);
-      toast("Kode room disalin.");
+      toast("Kode room berhasil disalin.");
     } catch {
       toast("Kode room: " + currentCode);
     }
-  };
+  });
 
   socket.on("room:joined", data => {
+    joining = false;
     currentCode = data.code;
     isDealer = data.isDealer;
 
     $("lobby").classList.add("hidden");
     $("game").classList.remove("hidden");
+
     $("roomCode").textContent = currentCode;
 
     toast("Berhasil masuk room.");
   });
 
-  socket.on("error:notice", message => toast(message));
+  socket.on("error:notice", message => {
+    joining = false;
+    setLobbyButtons(socket.connected ? false : true);
+    toast(message);
+  });
 
   socket.on("hand:update", cards => {
     renderCards($("myHand"), cards);
@@ -235,6 +300,7 @@
     $("status").textContent = room.message;
 
     $("players").innerHTML = "";
+
     room.players.forEach(player => {
       $("players").appendChild(renderPlayer(player));
     });
@@ -243,16 +309,23 @@
     renderResults(room.results);
 
     const myTurn = room.currentPlayerId === mySocketId;
-    const active = room.stage !== "waiting" &&
+
+    const active =
+      room.stage !== "waiting" &&
       room.stage !== "showdown";
 
-    $("turnInfo").textContent = active
-      ? (myTurn
-          ? "Giliranmu! Pilih CHECK atau FOLD."
-          : "Menunggu giliran pemain berikutnya.")
-      : room.stage === "showdown"
-        ? "Ronde selesai."
-        : "Menunggu dealer memulai ronde.";
+    if (active && myTurn) {
+      $("turnInfo").textContent =
+        "Giliranmu! Pilih CHECK atau FOLD.";
+    } else if (active) {
+      $("turnInfo").textContent =
+        "Menunggu giliran pemain berikutnya.";
+    } else if (room.stage === "showdown") {
+      $("turnInfo").textContent = "Ronde selesai.";
+    } else {
+      $("turnInfo").textContent =
+        "Menunggu dealer memulai ronde.";
+    }
 
     $("actionControls").classList.toggle(
       "hidden",
@@ -261,7 +334,8 @@
 
     $("deal").classList.toggle(
       "hidden",
-      !(isDealer && room.stage === "waiting" &&
+      !(isDealer &&
+        room.stage === "waiting" &&
         room.players.length >= 2)
     );
 
@@ -271,5 +345,6 @@
     );
   });
 })();
+
 
 
