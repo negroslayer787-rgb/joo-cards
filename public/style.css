@@ -1,5 +1,6 @@
 /* =================================
    JOO CARDS — POKER TABLE UI
+   STAGE 3: CHIP & POT ANIMATIONS
 ================================= */
 
 * {
@@ -23,15 +24,13 @@
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(ellipse at top, #193b2b 0%, #0b1b13 45%, #050c09 100%);
+  background: radial-gradient(ellipse at top, #193b2b 0%, #0b1b13 45%, #050c09 100%);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
   padding: 20px;
 }
 
-button,
-input {
+button, input {
   font: inherit;
 }
 
@@ -259,8 +258,7 @@ header {
   min-height: 560px;
   padding: 30px;
   border-radius: 32px;
-  background:
-    radial-gradient(ellipse at center, #1b8053 0%, #12603e 48%, #0a3927 100%);
+  background: radial-gradient(ellipse at center, #1b8053 0%, #12603e 48%, #0a3927 100%);
   border: 10px solid #513a25;
   box-shadow:
     inset 0 0 0 3px rgba(220, 185, 111, .55),
@@ -308,12 +306,14 @@ header {
 /* POT */
 
 .pot-display {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 35px;
   margin: 12px auto 22px;
   color: white;
+  min-height: 55px;
 }
 
 .pot-display strong {
@@ -321,11 +321,20 @@ header {
   color: #ffe19a;
   font-size: 25px;
   margin-top: 5px;
+  transform-origin: center;
 }
 
 .pot-display span {
   font-size: 10px;
   letter-spacing: 1px;
+}
+
+.pot-display.pot-pulse strong {
+  animation: potPulse .55s ease;
+}
+
+.pot-display.pot-win {
+  animation: potWin .9s ease;
 }
 
 /* PLAYERS */
@@ -338,6 +347,7 @@ header {
 }
 
 .player {
+  position: relative;
   min-width: 0;
   padding: 14px 8px;
   border-radius: 13px;
@@ -364,6 +374,12 @@ header {
 .player.folded-player {
   opacity: .45;
   filter: grayscale(1);
+}
+
+.player.all-in-player {
+  border: 2px solid #ffcf68;
+  box-shadow: 0 0 18px rgba(255, 207, 104, .55);
+  animation: allInGlow 1.4s ease-in-out infinite alternate;
 }
 
 .card-backs {
@@ -431,7 +447,7 @@ header {
   box-shadow: 0 5px 12px rgba(0, 0, 0, .25);
   font-size: 22px;
   font-weight: 900;
-  animation: cardIn .25s ease;
+  animation: cardIn .35s ease both;
 }
 
 .card.red {
@@ -447,13 +463,7 @@ header {
   height: 54px;
   border: 3px solid #e1c47e;
   border-radius: 6px;
-  background: repeating-linear-gradient(
-    45deg,
-    #183b68,
-    #183b68 5px,
-    #244f83 5px,
-    #244f83 10px
-  );
+  background: repeating-linear-gradient(45deg, #183b68, #183b68 5px, #244f83 5px, #244f83 10px);
 }
 
 /* MY HAND */
@@ -582,6 +592,10 @@ header {
   margin: 5px;
 }
 
+#winnerPopup:not(.hidden) .popup-card {
+  animation: winnerEnter .55s cubic-bezier(.2, .8, .2, 1);
+}
+
 /* TOAST */
 
 #toast {
@@ -605,12 +619,88 @@ header {
   opacity: 1;
 }
 
-/* ANIMATION */
+/* CHIP ANIMATION */
+
+.flying-chip {
+  position: fixed;
+  z-index: 300;
+  width: 24px;
+  height: 24px;
+  border: 4px dashed #fff0b5;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f7d77d 0 35%, #b48736 38% 100%);
+  box-shadow: 0 3px 9px rgba(0, 0, 0, .45);
+  pointer-events: none;
+  animation: chipFly .75s cubic-bezier(.3, .7, .2, 1) forwards;
+}
+
+.flying-chip.to-winner {
+  animation-name: chipWin;
+}
+
+.pot-display {
+  isolation: isolate;
+}
+
+/* ANIMATIONS */
 
 @keyframes cardIn {
   from {
     opacity: 0;
     transform: translateY(12px) scale(.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes chipFly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotate(0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--chip-x), var(--chip-y)) scale(.35) rotate(540deg);
+  }
+}
+
+@keyframes chipWin {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--chip-x), var(--chip-y)) scale(1.2) rotate(360deg);
+  }
+}
+
+@keyframes potPulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); color: #fff; }
+  100% { transform: scale(1); }
+}
+
+@keyframes potWin {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.12); filter: brightness(1.8); }
+  100% { transform: scale(1); }
+}
+
+@keyframes allInGlow {
+  from { box-shadow: 0 0 8px rgba(255, 207, 104, .25); }
+  to { box-shadow: 0 0 22px rgba(255, 207, 104, .8); }
+}
+
+@keyframes winnerEnter {
+  from {
+    opacity: 0;
+    transform: translateY(25px) scale(.85);
   }
   to {
     opacity: 1;
