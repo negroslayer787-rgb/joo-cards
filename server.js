@@ -1,5 +1,4 @@
 
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -57,20 +56,21 @@ function makeDeck() {
 function sendUpdate(room) {
   io.to(room.code).emit("room:update", {
     round: room.round,
+    stage: room.stage,
     message: room.message,
-    dealt: room.dealt,
+    community: room.community,
     players: room.players.map(player => ({
       name: player.name,
       isDealer: player.id === room.dealerId,
-      hasHand: player.hand.length === 2
+      hasHand: player.hand.length === 2,
+      publicHand: room.stage === "showdown" ? player.hand : null
     }))
   });
 
+  // Kartu pribadi hanya dikirim ke pemiliknya.
   room.players.forEach(player => {
     io.to(player.id).emit("hand:update", player.hand);
   });
-
-  io.to(room.code).emit("community:update", room.community);
 }
 
 function removePlayer(socket) {
@@ -102,8 +102,19 @@ function removePlayer(socket) {
   sendUpdate(room);
 }
 
+function dealerRoom(socket) {
+  const room = rooms.get(socket.data.roomCode);
+
+  if (!room || room.dealerId !== socket.id) {
+    socket.emit("error:notice", "Hanya dealer yang dapat melakukan tindakan ini.");
+    return null;
+  }
+
+  return room;
+}
+
 io.on("connection", socket => {
-  console.log("Terhubung:", socket.id);
+  console.log("Pemain terhubung:", socket.id);
 
   socket.on("room:create", (data = {}, callback) => {
     removePlayer(socket);
@@ -119,10 +130,10 @@ io.on("connection", socket => {
         hand: []
       }],
       round: 1,
-      dealt: false,
+      stage: "waiting",
       deck: [],
       community: [],
-      message: "Room dibuat. Menunggu pemain."
+      message: "Room dibuat. Menunggu pemain lain."
     };
 
     rooms.set(code, room);
@@ -157,6 +168,12 @@ io.on("connection", socket => {
       return;
     }
 
+    if (room.stage !== "waiting") {
+      socket.emit("error:notice", "Ronde sedang berlangsung. Coba lagi setelah ronde selesai.");
+      if (typeof callback === "function") callback({ ok: false });
+      return;
+    }
+
     removePlayer(socket);
 
     const player = {
@@ -184,12 +201,8 @@ io.on("connection", socket => {
   });
 
   socket.on("dealer:deal", () => {
-    const room = rooms.get(socket.data.roomCode);
-
-    if (!room || room.dealerId !== socket.id) {
-      socket.emit("error:notice", "Hanya dealer yang dapat membagikan kartu.");
-      return;
-    }
+    const room = dealerRoom(socket);
+    if (!room || room.stage !== "waiting") return;
 
     if (room.players.length < 2) {
       socket.emit("error:notice", "Minimal 2 pemain diperlukan.");
@@ -206,22 +219,73 @@ io.on("connection", socket => {
       ];
     });
 
-    room.dealt = true;
-    room.message = "Dua kartu pribadi telah dibagikan.";
+    room.stage = "preflop";
+    room.message = "Pre-Flop: setiap pemain menerima 2 kartu pribadi.";
+
+    sendUpdate(room);
+  });
+
+  socket.on("dealer:flop", () => {
+    const room = dealerRoom(socket);
+    if (!room || room.stage !== "preflop") return;
+
+    // Satu kartu dibakar sebelum membuka flop.
+    room.deck.pop();
+
+    room.community.push(
+      room.deck.pop(),
+      room.deck.pop(),
+      room.deck.pop()
+    );
+
+    room.stage = "flop";
+    room.message = "Flop: 3 community cards telah dibuka.";
+
+    sendUpdate(room);
+  });
+
+  socket.on("dealer:turn", () => {
+    const room = dealerRoom(socket);
+    if (!room || room.stage !== "flop") return;
+
+    room.deck.pop();
+    room.community.push(room.deck.pop());
+
+    room.stage = "turn";
+    room.message = "Turn: kartu community keempat telah dibuka.";
+
+    sendUpdate(room);
+  });
+
+  socket.on("dealer:river", () => {
+    const room = dealerRoom(socket);
+    if (!room || room.stage !== "turn") return;
+
+    room.deck.pop();
+    room.community.push(room.deck.pop());
+
+    room.stage = "river";
+    room.message = "River: kartu community kelima telah dibuka.";
+
+    sendUpdate(room);
+  });
+
+  socket.on("dealer:showdown", () => {
+    const room = dealerRoom(socket);
+    if (!room || room.stage !== "river") return;
+
+    room.stage = "showdown";
+    room.message = "Showdown: kartu pribadi seluruh pemain dibuka.";
 
     sendUpdate(room);
   });
 
   socket.on("dealer:next", () => {
-    const room = rooms.get(socket.data.roomCode);
-
-    if (!room || room.dealerId !== socket.id) {
-      socket.emit("error:notice", "Hanya dealer yang dapat memulai ronde baru.");
-      return;
-    }
+    const room = dealerRoom(socket);
+    if (!room || room.stage !== "showdown") return;
 
     room.round++;
-    room.dealt = false;
+    room.stage = "waiting";
     room.deck = [];
     room.community = [];
 
@@ -235,7 +299,7 @@ io.on("connection", socket => {
   });
 
   socket.on("disconnect", () => {
-    console.log("Terputus:", socket.id);
+    console.log("Pemain terputus:", socket.id);
     removePlayer(socket);
   });
 });
@@ -243,4 +307,5 @@ io.on("connection", socket => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log("Joo Cards berjalan pada port " + PORT);
 });
+
 
