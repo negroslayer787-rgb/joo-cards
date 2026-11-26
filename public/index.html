@@ -5,10 +5,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Joo Cards</title>
-  <link rel="stylesheet" href="/style.css?v=999">
+  <link rel="stylesheet" href="/style.css?v=1000">
 </head>
 <body>
 <div class="shell">
+
   <header>
     <div class="brand">
       <span class="mark">J</span>
@@ -31,112 +32,207 @@
       <div class="entry">
         <label for="name">Nama pemain</label>
         <input id="name" maxlength="18" placeholder="Masukkan nama">
-        <button id="create" class="primary" type="button">BUAT ROOM</button>
+
+        <button id="create" class="primary" type="button">
+          BUAT ROOM
+        </button>
+
         <div class="or">ATAU GABUNG ROOM</div>
+
         <input id="code" maxlength="6" placeholder="KODE ROOM">
-        <button id="join" class="secondary" type="button">GABUNG ROOM</button>
+
+        <button id="join" class="secondary" type="button">
+          GABUNG ROOM
+        </button>
       </div>
     </section>
 
     <section id="game" class="hidden">
+
       <div class="roombar panel">
         <div>
           <small>KODE ROOM</small>
           <strong id="roomCode">------</strong>
         </div>
-        <button id="copy" class="secondary small" type="button">SALIN KODE</button>
-        <div>RONDE <b id="round">1</b></div>
+
+        <button id="copy" class="secondary small" type="button">
+          SALIN KODE
+        </button>
+
+        <div>
+          RONDE <b id="round">1</b>
+        </div>
       </div>
 
       <section id="dealerPanel" class="panel hidden">
         <h2>Panel Dealer</h2>
         <p>Dealer mengelola meja dan tidak ikut menerima kartu.</p>
+
         <div id="dealerPlayers"></div>
+
         <div id="startControls">
-          <label for="bbAmount">Big Blind — taruhan awal</label>
+          <label for="bbAmount">
+            Big Blind — taruhan awal
+          </label>
+
           <input id="bbAmount" type="number" min="1" value="2">
-          <button id="startRound" class="primary" type="button">MULAI RONDE</button>
+
+          <button id="startRound" class="primary" type="button">
+            MULAI RONDE
+          </button>
         </div>
-        <button id="nextRound" class="secondary hidden" type="button">RONDE BERIKUTNYA</button>
+
+        <button id="nextRound" class="secondary hidden" type="button">
+          RONDE BERIKUTNYA
+        </button>
       </section>
 
       <section class="table panel">
+
         <div class="tabletop">
-          <div class="tablelabel">JOO <span>CARDS</span></div>
-          <div id="status" class="status">Menunggu pemain...</div>
+          <div class="tablelabel">
+            JOO <span>CARDS</span>
+          </div>
+
+          <div id="status" class="status">
+            Menunggu pemain...
+          </div>
         </div>
 
         <div class="pot-display">
-          POT: <strong id="pot">0</strong> CHIP
-          <span>Taruhan saat ini: <b id="currentBet">0</b></span>
+          <div>
+            POT:
+            <strong id="pot">0</strong>
+            CHIP
+          </div>
+
+          <span>
+            Taruhan saat ini:
+            <b id="currentBet">0</b>
+          </span>
         </div>
 
         <h3>PEMAIN</h3>
+
         <div id="players" class="players"></div>
-        <div id="turnInfo" class="turn-info">Menunggu ronde dimulai.</div>
+
+        <div id="turnInfo" class="turn-info">
+          Menunggu ronde dimulai.
+        </div>
 
         <div class="community">
           <h3>COMMUNITY CARDS</h3>
+
           <div id="communityCards" class="card-area">
-            <span class="placeholder">Menunggu kartu meja</span>
+            <span class="placeholder">
+              Menunggu kartu meja
+            </span>
           </div>
         </div>
 
         <div class="my-hand">
           <h3>KARTU PRIBADIMU</h3>
+
           <div id="myHand" class="card-area">
-            <span class="placeholder">Menunggu pembagian kartu</span>
+            <span class="placeholder">
+              Menunggu pembagian kartu
+            </span>
           </div>
         </div>
 
         <div id="actionControls" class="controls hidden">
-          <button id="check" class="primary" type="button">CHECK</button>
-          <button id="call" class="primary" type="button">CALL</button>
-          <input id="raiseTo" type="number" min="1" placeholder="Raise menjadi">
-          <button id="raise" class="secondary" type="button">RAISE</button>
-          <button id="allin" class="secondary" type="button">ALL-IN</button>
-          <button id="fold" class="secondary" type="button">FOLD</button>
+
+          <button id="check" class="primary" type="button">
+            CHECK
+          </button>
+
+          <button id="call" class="primary" type="button">
+            CALL
+          </button>
+
+          <input
+            id="raiseTo"
+            type="number"
+            min="1"
+            placeholder="Raise menjadi"
+          >
+
+          <button id="raise" class="secondary" type="button">
+            RAISE
+          </button>
+
+          <button id="allin" class="secondary" type="button">
+            ALL-IN
+          </button>
+
+          <button id="fold" class="secondary" type="button">
+            FOLD
+          </button>
         </div>
 
         <div id="topupControls" class="controls hidden">
-          <button id="topupRequest" class="primary" type="button">MINTA ISI ULANG 10 CHIP</button>
+          <button id="topupRequest" class="primary" type="button">
+            MINTA ISI ULANG 10 CHIP
+          </button>
         </div>
 
         <section id="results" class="results hidden">
           <h3>HASIL SHOWDOWN</h3>
+
           <div id="winnerText"></div>
+
           <div id="rankingList"></div>
         </section>
+
       </section>
     </section>
   </main>
 
+  <!-- POPUP PEMENANG -->
+
   <div id="winnerPopup" class="popup hidden">
     <div class="popup-card">
       <div class="trophy">🏆</div>
+
       <h2>SELAMAT!</h2>
+
       <h3 id="popupWinner">PEMENANG</h3>
+
       <p id="popupHand"></p>
-      <button id="closePopup" class="primary" type="button">LANJUTKAN</button>
+
+      <button id="closePopup" class="primary" type="button">
+        LANJUTKAN
+      </button>
     </div>
   </div>
 
+  <!-- POPUP TOP UP -->
+
   <div id="topupPopup" class="popup hidden">
     <div class="popup-card">
+
       <h2>Permintaan Isi Ulang</h2>
+
       <p id="topupText"></p>
-      <button id="approveTopup" class="primary" type="button">SETUJUI +10 CHIP</button>
-      <button id="closeTopup" class="secondary" type="button">TUTUP</button>
+
+      <button id="approveTopup" class="primary" type="button">
+        SETUJUI +10 CHIP
+      </button>
+
+      <button id="closeTopup" class="secondary" type="button">
+        TUTUP
+      </button>
+
     </div>
   </div>
 
   <div id="toast" role="status"></div>
+
 </div>
 
-<script src="/socket.io/socket.io.js?v=6"></script>
-<script src="/app.js?v=7"></script>
+<script src="/socket.io/socket.io.js?v=1000"></script>
+<script src="/app.js?v=1000"></script>
+
 </body>
 </html>
-
-
 
