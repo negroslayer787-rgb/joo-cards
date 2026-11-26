@@ -1,5 +1,4 @@
 
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -54,26 +53,20 @@ function makeDeck() {
   return deck;
 }
 
-function notifyError(socket, message) {
-  socket.emit("error:notice", message);
-}
-
 function sendUpdate(code) {
   const room = rooms.get(code);
   if (!room) return;
-
-  const players = room.players.map(player => ({
-    name: player.name,
-    isDealer: player.id === room.dealerId,
-    hasCard: Boolean(player.card),
-    card: room.revealed ? player.card : null
-  }));
 
   io.to(code).emit("room:update", {
     round: room.round,
     message: room.message,
     revealed: room.revealed,
-    players
+    players: room.players.map(player => ({
+      name: player.name,
+      isDealer: player.id === room.dealerId,
+      hasCard: Boolean(player.card),
+      card: room.revealed ? player.card : null
+    }))
   });
 }
 
@@ -81,12 +74,15 @@ function removePlayer(socket) {
   const code = socket.data.roomCode;
   if (!code) return;
 
-  const room = rooms.get(code);
   socket.data.roomCode = null;
+  socket.leave(code);
 
+  const room = rooms.get(code);
   if (!room) return;
 
-  room.players = room.players.filter(player => player.id !== socket.id);
+  room.players = room.players.filter(
+    player => player.id !== socket.id
+  );
 
   if (room.players.length === 0) {
     rooms.delete(code);
@@ -110,6 +106,7 @@ io.on("connection", socket => {
     removePlayer(socket);
 
     const code = makeCode();
+
     const player = {
       id: socket.id,
       name: String(data.name || "Pemain").trim().slice(0, 18) || "Pemain",
@@ -146,13 +143,13 @@ io.on("connection", socket => {
     const room = rooms.get(code);
 
     if (!room) {
-      notifyError(socket, "Room tidak ditemukan.");
+      socket.emit("error:notice", "Room tidak ditemukan.");
       if (typeof callback === "function") callback({ ok: false });
       return;
     }
 
     if (room.players.length >= 8) {
-      notifyError(socket, "Room sudah penuh.");
+      socket.emit("error:notice", "Room sudah penuh.");
       if (typeof callback === "function") callback({ ok: false });
       return;
     }
@@ -166,7 +163,7 @@ io.on("connection", socket => {
     };
 
     room.players.push(player);
-    room.message = `${player.name} bergabung ke room.`;
+    room.message = player.name + " bergabung ke room.";
 
     socket.join(code);
     socket.data.roomCode = code;
@@ -184,16 +181,15 @@ io.on("connection", socket => {
   });
 
   socket.on("dealer:deal", () => {
-    const code = socket.data.roomCode;
-    const room = rooms.get(code);
+    const room = rooms.get(socket.data.roomCode);
 
     if (!room || room.dealerId !== socket.id) {
-      notifyError(socket, "Hanya dealer yang dapat membagikan kartu.");
+      socket.emit("error:notice", "Hanya dealer yang dapat membagikan kartu.");
       return;
     }
 
     if (room.players.length < 2) {
-      notifyError(socket, "Minimal harus ada 2 pemain.");
+      socket.emit("error:notice", "Minimal harus ada 2 pemain.");
       return;
     }
 
@@ -205,45 +201,44 @@ io.on("connection", socket => {
 
     room.revealed = false;
     room.message = "Kartu telah dibagikan.";
-    sendUpdate(code);
+    sendUpdate(room.code);
   });
 
   socket.on("dealer:reveal", () => {
-    const code = socket.data.roomCode;
-    const room = rooms.get(code);
+    const room = rooms.get(socket.data.roomCode);
 
     if (!room || room.dealerId !== socket.id) {
-      notifyError(socket, "Hanya dealer yang dapat membuka kartu.");
+      socket.emit("error:notice", "Hanya dealer yang dapat membuka kartu.");
       return;
     }
 
     if (!room.players.some(player => player.card)) {
-      notifyError(socket, "Bagikan kartu terlebih dahulu.");
+      socket.emit("error:notice", "Bagikan kartu terlebih dahulu.");
       return;
     }
 
     room.revealed = true;
     room.message = "Semua kartu telah dibuka.";
-    sendUpdate(code);
+    sendUpdate(room.code);
   });
 
   socket.on("dealer:next", () => {
-    const code = socket.data.roomCode;
-    const room = rooms.get(code);
+    const room = rooms.get(socket.data.roomCode);
 
     if (!room || room.dealerId !== socket.id) {
-      notifyError(socket, "Hanya dealer yang dapat memulai ronde berikutnya.");
+      socket.emit("error:notice", "Hanya dealer yang dapat memulai ronde berikutnya.");
       return;
     }
 
-    room.round += 1;
+    room.round++;
     room.revealed = false;
+
     room.players.forEach(player => {
       player.card = null;
     });
 
     room.message = "Ronde baru dimulai.";
-    sendUpdate(code);
+    sendUpdate(room.code);
   });
 
   socket.on("disconnect", () => {
@@ -253,6 +248,6 @@ io.on("connection", socket => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Joo Cards berjalan pada port ${PORT}`);
+  console.log("Joo Cards berjalan pada port " + PORT);
 });
 
