@@ -62,6 +62,12 @@
 
     socket.on("connected", data => {
       myId = data.id;
+
+      // Jika room update datang lebih dahulu,
+      // render ulang setelah ID pemain diketahui.
+      if (lastRoom) {
+        renderRoom(lastRoom);
+      }
     });
 
     socket.on("connect", () => {
@@ -74,6 +80,12 @@
       if ($("connection")) {
         $("connection").textContent = "TERPUTUS";
       }
+
+      toast("Koneksi terputus.");
+    });
+
+    socket.on("connect_error", () => {
+      toast("Gagal menghubungkan ke server.");
     });
 
     socket.on("toast", toast);
@@ -89,27 +101,43 @@
       }
 
       if ($("editName")) {
-        $("editName").value = $("name")?.value || "";
+        $("editName").value =
+          $("name")?.value || "";
       }
 
       visible("lobby", false);
       visible("game", true);
 
-      // Pada VS AI, panel mengendalikan ronde AI Dealer,
-      // bukan menjadikan pemain manusia sebagai dealer.
-      visible("dealerPanel", isDealer || isAI);
-      visible("startControls", isDealer || isAI);
+      visible(
+        "dealerPanel",
+        isDealer || isAI
+      );
+
+      visible(
+        "startControls",
+        isDealer || isAI
+      );
+
       visible("topupControls", false);
 
       updateDealerUI();
+
+      toast(
+        isAI
+          ? "Room VS AI berhasil dibuat."
+          : "Berhasil masuk room."
+      );
     });
 
     socket.on("room:update", room => {
+      lastRoom = room;
       renderRoom(room);
     });
 
     socket.on("dealer:update", data => {
-      if (isDealer) renderDealer(data);
+      if (isDealer) {
+        renderDealer(data);
+      }
     });
 
     socket.on("topup:request", data => {
@@ -128,32 +156,36 @@
 
     visible("dealerPanel", hasControl);
     visible("startControls", hasControl);
-    visible("startRound", hasControl);
-    visible("nextRound", false);
 
-    const heading = $("dealerPanel")?.querySelector("h2");
-    const description = $("dealerPanel")?.querySelector("p");
+    const heading =
+      $("dealerPanel")?.querySelector("h2");
+
+    const description =
+      $("dealerPanel")?.querySelector("p");
 
     if (isAI) {
-      if (heading) heading.textContent = "AI DEALER";
+      if (heading) {
+        heading.textContent = "AI DEALER";
+      }
+
       if (description) {
         description.textContent =
           "Dealer otomatis mengelola pembagian kartu dan jalannya ronde.";
       }
 
       if ($("startRound")) {
-        $("startRound").textContent = "MULAI RONDE";
+        $("startRound").textContent =
+          "MULAI RONDE";
       }
 
       if ($("nextRound")) {
-        $("nextRound").textContent = "RONDE BERIKUTNYA";
+        $("nextRound").textContent =
+          "RONDE BERIKUTNYA";
       }
-    }
 
-    if ($("dealerIndicator")) {
-      $("dealerIndicator").style.display = "flex";
+      if ($("dealerIndicator")) {
+        $("dealerIndicator").style.display = "flex";
 
-      if (isAI) {
         $("dealerIndicator").innerHTML = `
           <div class="dealer-chip">D</div>
           <span>AI DEALER</span>
@@ -195,7 +227,7 @@
         button.disabled = false;
         button.textContent = "VS AI — 4 BOT";
       }
-    }, 2500);
+    }, 3000);
   }
 
   function joinRoom() {
@@ -204,7 +236,8 @@
       return;
     }
 
-    const code = $("code")?.value.trim().toUpperCase();
+    const code =
+      $("code")?.value.trim().toUpperCase();
 
     if (!code) {
       toast("Masukkan kode room.");
@@ -217,21 +250,22 @@
     });
   }
 
-  // Kartu utama mengikuti class asli dari style.css: .card
   function cardHTML(card, hidden = false) {
     if (hidden || !card) {
       return `
-        <div class="card card-empty" aria-label="Kartu tertutup">
+        <div class="card card-empty"
+             aria-label="Kartu tertutup">
           <span>?</span>
         </div>
       `;
     }
 
-    const red = card.suit === "♥" || card.suit === "♦";
-    const colorClass = red ? "red" : "";
+    const red =
+      card.suit === "♥" ||
+      card.suit === "♦";
 
     return `
-      <div class="card ${colorClass}">
+      <div class="card ${red ? "red" : ""}">
         <span>${escapeHTML(card.rank)}</span>
         <span>${escapeHTML(card.suit)}</span>
       </div>
@@ -241,7 +275,9 @@
   function miniCardHTML(card) {
     if (!card) return "";
 
-    const red = card.suit === "♥" || card.suit === "♦";
+    const red =
+      card.suit === "♥" ||
+      card.suit === "♦";
 
     return `
       <div class="mini-card ${red ? "red" : ""}">
@@ -272,16 +308,25 @@
 
       const avatar = player.avatar
         ? `<img src="${player.avatar}" alt="Foto profil">`
-        : escapeHTML((player.name || "?")[0].toUpperCase());
+        : escapeHTML(
+            (player.name || "?")[0].toUpperCase()
+          );
 
       const showCards =
         isMe ||
-        (room.phase === "showdown" && !player.folded);
+        (
+          room.phase === "showdown" &&
+          !player.folded
+        );
 
       const cardsHTML = showCards
-        ? `<div class="mini-cards">
-            ${(player.hand || []).map(miniCardHTML).join("")}
-           </div>`
+        ? `
+          <div class="mini-cards">
+            ${(player.hand || [])
+              .map(miniCardHTML)
+              .join("")}
+          </div>
+        `
         : room.phase !== "waiting"
           ? cardBacksHTML()
           : "";
@@ -300,28 +345,33 @@
 
       seat.innerHTML = `
         <div class="player-top">
-          <div class="player-avatar">${avatar}</div>
+          <div class="player-avatar">
+            ${avatar}
+          </div>
 
           <div style="min-width:0">
             <div class="player-name">
               ${escapeHTML(player.name)}
             </div>
 
-            ${player.isAI
-              ? '<div class="role">AI PLAYER</div>'
-              : isMe
-                ? '<div class="role">YOU · PLAYER</div>'
-                : '<div class="role">PLAYER</div>'
+            ${
+              player.isAI
+                ? '<div class="role">AI PLAYER</div>'
+                : isMe
+                  ? '<div class="role">YOU · PLAYER</div>'
+                  : '<div class="role">PLAYER</div>'
             }
 
-            ${player.folded
-              ? '<div class="role">FOLD</div>'
-              : ""
+            ${
+              player.folded
+                ? '<div class="role">FOLD</div>'
+                : ""
             }
 
-            ${player.allIn
-              ? '<div class="role">ALL IN</div>'
-              : ""
+            ${
+              player.allIn
+                ? '<div class="role">ALL IN</div>'
+                : ""
             }
           </div>
         </div>
@@ -330,9 +380,10 @@
           ${player.chips} chip
         </div>
 
-        ${player.bet > 0
-          ? `<div class="player-bet">Bet: ${player.bet}</div>`
-          : ""
+        ${
+          player.bet > 0
+            ? `<div class="player-bet">Bet: ${player.bet}</div>`
+            : ""
         }
 
         ${cardsHTML}
@@ -344,7 +395,8 @@
     const felt = $("feltLayout");
 
     if (felt) {
-      felt.dataset.count = String(room.players.length);
+      felt.dataset.count =
+        String(room.players.length);
     }
   }
 
@@ -360,23 +412,31 @@
       return;
     }
 
-    (room.community || []).forEach((card, index) => {
-      const html = cardHTML(card);
-
-      target.insertAdjacentHTML("beforeend", html);
-
-      const lastCard = target.lastElementChild;
-
-      if (lastCard) {
-        lastCard.classList.add("community-deal");
-        lastCard.style.setProperty(
-          "--deal-delay",
-          `${index * 130}ms`
+    (room.community || []).forEach(
+      (card, index) => {
+        target.insertAdjacentHTML(
+          "beforeend",
+          cardHTML(card)
         );
-      }
-    });
 
-    for (let i = room.community.length; i < 5; i++) {
+        const lastCard = target.lastElementChild;
+
+        if (lastCard) {
+          lastCard.classList.add("community-deal");
+
+          lastCard.style.setProperty(
+            "--deal-delay",
+            `${index * 130}ms`
+          );
+        }
+      }
+    );
+
+    for (
+      let i = room.community.length;
+      i < 5;
+      i++
+    ) {
       target.insertAdjacentHTML(
         "beforeend",
         '<div class="card card-empty"></div>'
@@ -388,7 +448,9 @@
     const target = $("myHand");
     if (!target) return;
 
-    const me = room.players.find(player => player.id === myId);
+    const me = room.players.find(
+      player => player.id === myId
+    );
 
     if (!me || !me.hand?.length) {
       target.innerHTML =
@@ -396,17 +458,25 @@
       return;
     }
 
-    target.innerHTML = me.hand
-      .map((card, index) => {
-        return cardHTML(card).replace(
-          'class="card ',
-          `class="card private-deal `
-        ).replace(
-          'class="card private-deal ',
-          `style="--deal-delay:${index * 160}ms" class="card private-deal `
+    target.innerHTML = "";
+
+    me.hand.forEach((card, index) => {
+      target.insertAdjacentHTML(
+        "beforeend",
+        cardHTML(card)
+      );
+
+      const element = target.lastElementChild;
+
+      if (element) {
+        element.classList.add("private-deal");
+
+        element.style.setProperty(
+          "--deal-delay",
+          `${index * 160}ms`
         );
-      })
-      .join("");
+      }
+    });
   }
 
   function renderPot(room) {
@@ -415,15 +485,18 @@
     }
 
     if ($("potDisplay")) {
-      $("potDisplay").dataset.total = room.pot ?? 0;
+      $("potDisplay").dataset.total =
+        room.pot ?? 0;
     }
 
     if ($("currentBet")) {
-      $("currentBet").textContent = room.currentBet ?? 0;
+      $("currentBet").textContent =
+        room.currentBet ?? 0;
     }
 
     if ($("round")) {
-      $("round").textContent = room.round || 0;
+      $("round").textContent =
+        room.round || 0;
     }
 
     if ($("status")) {
@@ -445,16 +518,28 @@
         player => player.id === room.turnId
       );
 
-      $("turnInfo").textContent = current
-        ? `Giliran: ${current.name}`
-        : room.phase === "showdown"
-          ? "Ronde selesai"
-          : "Menunggu ronde dimulai.";
+      if (current) {
+        $("turnInfo").textContent =
+          current.isAI
+            ? `Giliran: ${current.name} (AI)`
+            : `Giliran: ${current.name}`;
+      } else if (room.phase === "showdown") {
+        $("turnInfo").textContent =
+          "Ronde selesai";
+      } else if (room.phase === "waiting") {
+        $("turnInfo").textContent =
+          "Menunggu ronde dimulai.";
+      } else {
+        $("turnInfo").textContent =
+          "Menyiapkan giliran...";
+      }
     }
   }
 
   function renderActions(room) {
-    const me = room.players.find(player => player.id === myId);
+    const me = room.players.find(
+      player => player.id === myId
+    );
 
     const myTurn = !!(
       me &&
@@ -469,7 +554,10 @@
 
     if (!myTurn) return;
 
-    const toCall = Math.max(0, room.currentBet - me.bet);
+    const toCall = Math.max(
+      0,
+      room.currentBet - me.bet
+    );
 
     visible("check", toCall === 0);
     visible("call", toCall > 0);
@@ -480,16 +568,21 @@
     }
 
     if ($("raiseTo")) {
-      $("raiseTo").min = String(room.currentBet + 1);
-      $("raiseTo").max = String(me.bet + me.chips);
+      $("raiseTo").min =
+        String(room.currentBet + 1);
+
+      $("raiseTo").max =
+        String(me.bet + me.chips);
     }
 
     if ($("raise")) {
-      $("raise").disabled = me.chips <= toCall;
+      $("raise").disabled =
+        me.chips <= toCall;
     }
 
     if ($("allin")) {
-      $("allin").disabled = me.chips <= 0;
+      $("allin").disabled =
+        me.chips <= 0;
     }
   }
 
@@ -501,6 +594,7 @@
 
     data.players.forEach(player => {
       const row = document.createElement("div");
+
       row.className = "dealer-player-row";
 
       row.textContent =
@@ -511,30 +605,38 @@
   }
 
   function renderResults(room) {
-    if (room.phase !== "showdown" || !room.results?.length) {
+    if (
+      room.phase !== "showdown" ||
+      !room.results?.length
+    ) {
       visible("results", false);
       return;
     }
 
-    const winnerNames = room.results
-      .flatMap(result => result.winners || []);
+    const winnerNames = room.results.flatMap(
+      result => result.winners || []
+    );
 
-    const winnerText = [...new Set(winnerNames)].join(", ");
+    const winnerText =
+      [...new Set(winnerNames)].join(", ");
 
     if ($("winnerText")) {
-      $("winnerText").textContent = `Pemenang: ${winnerText}`;
+      $("winnerText").textContent =
+        `Pemenang: ${winnerText}`;
     }
 
     if ($("popupWinner")) {
-      $("popupWinner").textContent = winnerText;
+      $("popupWinner").textContent =
+        winnerText;
     }
 
     if ($("popupHand")) {
-      $("popupHand").textContent = room.results
-        .map(result =>
-          `${result.hand} — ${result.amount} chip`
-        )
-        .join(" | ");
+      $("popupHand").textContent =
+        room.results
+          .map(result =>
+            `${result.hand} — ${result.amount} chip`
+          )
+          .join(" | ");
     }
 
     const ranking = $("rankingList");
@@ -556,7 +658,8 @@
 
     visible("results", true);
 
-    const key = `${room.round}-${winnerText}`;
+    const key =
+      `${room.round}-${winnerText}`;
 
     if (key !== lastWinnerKey) {
       lastWinnerKey = key;
@@ -574,22 +677,38 @@
     renderActions(room);
     renderResults(room);
 
-    const me = room.players.find(player => player.id === myId);
+    const me = room.players.find(
+      player => player.id === myId
+    );
 
     visible(
       "topupControls",
       !!me &&
       me.chips <= 0 &&
-      room.phase === "waiting"
+      (
+        room.phase === "waiting" ||
+        room.phase === "showdown"
+      )
     );
 
+    const hasControl = isDealer || isAI;
+
     const canStart =
-      (isDealer || isAI) &&
-      (room.phase === "waiting" || room.phase === "showdown");
+      hasControl &&
+      (
+        room.phase === "waiting" ||
+        room.phase === "showdown"
+      );
 
     visible("startRound", canStart);
-    visible("nextRound", (isDealer || isAI) && room.phase === "showdown");
-    visible("dealerPanel", isDealer || isAI);
+
+    visible(
+      "nextRound",
+      hasControl &&
+      room.phase === "showdown"
+    );
+
+    visible("dealerPanel", hasControl);
 
     if (isAI && $("startRound")) {
       $("startRound").textContent =
@@ -600,7 +719,10 @@
   }
 
   function sendAction(action, amount = 0) {
-    if (!socket?.connected) return;
+    if (!socket?.connected) {
+      toast("Koneksi terputus.");
+      return;
+    }
 
     socket.emit("player:action", {
       action,
@@ -643,17 +765,25 @@
         const image = new Image();
 
         image.onload = () => {
-          const canvas = document.createElement("canvas");
+          const canvas =
+            document.createElement("canvas");
+
           const max = 300;
 
           let width = image.width;
           let height = image.height;
 
           if (width > height && width > max) {
-            height = Math.round(height * max / width);
+            height = Math.round(
+              height * max / width
+            );
+
             width = max;
           } else if (height > max) {
-            width = Math.round(width * max / height);
+            width = Math.round(
+              width * max / height
+            );
+
             height = max;
           }
 
@@ -661,21 +791,33 @@
           canvas.height = height;
 
           const context = canvas.getContext("2d");
-          context.drawImage(image, 0, 0, width, height);
 
-          const avatar = canvas.toDataURL("image/jpeg", 0.75);
+          context.drawImage(
+            image,
+            0,
+            0,
+            width,
+            height
+          );
+
+          const avatar =
+            canvas.toDataURL("image/jpeg", 0.75);
 
           if (preview) {
             preview.innerHTML = "";
 
-            const img = document.createElement("img");
+            const img =
+              document.createElement("img");
+
             img.src = avatar;
             img.alt = "Foto profil";
 
             preview.appendChild(img);
           }
 
-          socket?.emit("player:profile", { avatar });
+          socket?.emit("player:profile", {
+            avatar
+          });
         };
 
         image.src = reader.result;
@@ -698,23 +840,52 @@
     bind("createAI", "click", createAIRoom);
     bind("join", "click", joinRoom);
 
-    bind("startRound", "click", () => {
-      socket?.emit("dealer:start");
+    bind("startRound", "click", event => {
+      event.preventDefault();
+
+      if (!socket?.connected) {
+        toast("Koneksi terputus.");
+        return;
+      }
+
+      socket.emit("dealer:start");
+      toast("Memulai ronde...");
     });
 
-    bind("nextRound", "click", () => {
-      socket?.emit("dealer:next");
+    bind("nextRound", "click", event => {
+      event.preventDefault();
+
+      if (!socket?.connected) {
+        toast("Koneksi terputus.");
+        return;
+      }
+
+      socket.emit("dealer:next");
+
       visible("winnerPopup", false);
       lastWinnerKey = "";
     });
 
-    bind("fold", "click", () => sendAction("fold"));
-    bind("check", "click", () => sendAction("check"));
-    bind("call", "click", () => sendAction("call"));
-    bind("allin", "click", () => sendAction("allin"));
+    bind("fold", "click", () => {
+      sendAction("fold");
+    });
+
+    bind("check", "click", () => {
+      sendAction("check");
+    });
+
+    bind("call", "click", () => {
+      sendAction("call");
+    });
+
+    bind("allin", "click", () => {
+      sendAction("allin");
+    });
 
     bind("raise", "click", () => {
-      const amount = Number($("raiseTo")?.value || 0);
+      const amount =
+        Number($("raiseTo")?.value || 0);
+
       sendAction("raise", amount);
     });
 
@@ -763,14 +934,24 @@
   function init() {
     bindButtons();
 
-    setupAvatar("avatarInput", "lobbyAvatarPreview");
-    setupAvatar("roomAvatarInput", "roomAvatarPreview");
+    setupAvatar(
+      "avatarInput",
+      "lobbyAvatarPreview"
+    );
+
+    setupAvatar(
+      "roomAvatarInput",
+      "roomAvatarPreview"
+    );
 
     connect();
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener(
+      "DOMContentLoaded",
+      init
+    );
   } else {
     init();
   }
