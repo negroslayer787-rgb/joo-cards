@@ -10,47 +10,61 @@ let isDealer = false;
 let currentCode = "";
 
 function toast(msg) {
-  $("toast").textContent = msg;
-  $("toast").classList.add("show");
-  setTimeout(() => $("toast").classList.remove("show"), 2400);
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 3000);
 }
 
 function name() {
   return $("name").value.trim() || "Pemain";
 }
 
+// DIAGNOSTIK KONEKSI
 socket.on("connect", () => {
-  console.log("Socket terhubung:", socket.id);
+  toast("TERHUBUNG KE SERVER");
+  console.log("Socket connected:", socket.id);
+});
+
+socket.on("disconnect", () => {
+  toast("KONEKSI TERPUTUS");
 });
 
 socket.on("connect_error", error => {
-  toast("Koneksi gagal: " + error.message);
-  console.error("Socket error:", error);
+  toast("ERROR KONEKSI: " + error.message);
 });
 
+// BUAT ROOM
 $("create").onclick = () => {
+  toast("TOMBOL DIKLIK");
+
   if (!socket.connected) {
-    toast("Server belum terhubung. Coba lagi.");
+    toast("SERVER BELUM TERHUBUNG");
     return;
   }
+
   socket.emit("room:create", { name: name() });
 };
 
+// GABUNG ROOM
 $("join").onclick = () => {
   if (!socket.connected) {
-    toast("Server belum terhubung. Coba lagi.");
+    toast("SERVER BELUM TERHUBUNG");
     return;
   }
+
   socket.emit("room:join", {
     name: name(),
     code: $("code").value
   });
 };
 
+// FITUR DEALER
 $("deal").onclick = () => socket.emit("dealer:deal");
 $("reveal").onclick = () => socket.emit("dealer:reveal");
 $("next").onclick = () => socket.emit("dealer:next");
 
+// SALIN KODE
 $("copy").onclick = async () => {
   try {
     await navigator.clipboard.writeText(currentCode);
@@ -60,16 +74,22 @@ $("copy").onclick = async () => {
   }
 };
 
+// ROOM BERHASIL DIBUAT
 socket.on("room:joined", data => {
   currentCode = data.code;
   isDealer = data.isDealer;
+
+  toast("ROOM BERHASIL DIBUAT");
+
   $("lobby").classList.add("hidden");
   $("game").classList.remove("hidden");
   $("roomCode").textContent = currentCode;
 });
 
-socket.on("error:notice", toast);
+// PESAN ERROR SERVER
+socket.on("error:notice", msg => toast("SERVER: " + msg));
 
+// UPDATE PERMAINAN
 socket.on("room:update", room => {
   $("round").textContent = room.round;
   $("status").textContent = room.message;
@@ -112,7 +132,12 @@ socket.on("room:update", room => {
   $("deal").classList.toggle("hidden", !isDealer);
   $("reveal").classList.toggle(
     "hidden",
-    !isDealer || room.revealed || !room.players.some(p => p.hasCard)
+    !isDealer || room.revealed ||
+    !room.players.some(p => p.hasCard)
   );
-  $("next").classList.toggle("hidden", !isDealer || !room.revealed);
+  $("next").classList.toggle(
+    "hidden",
+    !isDealer || !room.revealed
+  );
 });
+
