@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Joo Cards - Texas Hold'em</title>
-  <link rel="stylesheet" href="/style.css?v=4">
+  <link rel="stylesheet" href="/style.css?v=5">
 </head>
 <body>
 <div class="shell">
@@ -32,9 +32,7 @@
         <label for="name">Nama pemain</label>
         <input id="name" maxlength="18" placeholder="Masukkan nama">
         <button id="create" class="primary">BUAT ROOM</button>
-
         <div class="or">ATAU GABUNG ROOM</div>
-
         <input id="code" maxlength="6" placeholder="KODE ROOM">
         <button id="join" class="secondary">GABUNG ROOM</button>
       </div>
@@ -73,6 +71,12 @@
           </div>
         </div>
 
+        <section id="results" class="results hidden">
+          <h3>HASIL SHOWDOWN</h3>
+          <div id="winnerText"></div>
+          <div id="rankingList"></div>
+        </section>
+
         <div class="controls">
           <button id="deal" class="primary hidden">BAGIKAN KARTU</button>
           <button id="flop" class="secondary hidden">BUKA FLOP</button>
@@ -89,11 +93,10 @@
 </div>
 
 <script>
-document.getElementById("connection").textContent =
-  "MEMUAT SOCKET.IO...";
+document.getElementById("connection").textContent = "MEMUAT SOCKET.IO...";
 </script>
-<script src="/socket.io/socket.io.js?v=4"></script>
-<script src="/app.js?v=4"></script>
+<script src="/socket.io/socket.io.js?v=5"></script>
+<script src="/app.js?v=5"></script>
 </body>
 </html>
 
