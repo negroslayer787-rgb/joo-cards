@@ -108,7 +108,9 @@ function evaluateFive(cards) {
       b.count - a.count || b.value - a.value
     );
 
-  const flush = cards.every(card => card.suit === cards[0].suit);
+  const flush = cards.every(
+    card => card.suit === cards[0].suit
+  );
 
   const unique = [...new Set(values)];
   let straightHigh = 0;
@@ -116,9 +118,7 @@ function evaluateFive(cards) {
   if (unique.length === 5) {
     if (unique[0] - unique[4] === 4) {
       straightHigh = unique[0];
-    } else if (
-      unique.join(",") === "14,5,4,3,2"
-    ) {
+    } else if (unique.join(",") === "14,5,4,3,2") {
       straightHigh = 5;
     }
   }
@@ -154,8 +154,7 @@ function evaluateFive(cards) {
   }
 
   if (groups[0].count === 3) {
-    const kickers = groups
-      .slice(1)
+    const kickers = groups.slice(1)
       .map(group => group.value)
       .sort((a, b) => b - a);
 
@@ -171,7 +170,9 @@ function evaluateFive(cards) {
       .map(group => group.value)
       .sort((a, b) => b - a);
 
-    const kicker = groups.find(group => group.count === 1).value;
+    const kicker = groups.find(
+      group => group.count === 1
+    ).value;
 
     return {
       score: [2, ...pairs, kicker],
@@ -209,10 +210,9 @@ function compareScores(a, b) {
 }
 
 function evaluateSeven(cards) {
-  const allHands = combinations(cards, 5);
   let best = null;
 
-  for (const hand of allHands) {
+  for (const hand of combinations(cards, 5)) {
     const result = evaluateFive(hand);
 
     if (!best || compareScores(result.score, best.score) > 0) {
@@ -223,8 +223,31 @@ function evaluateSeven(cards) {
   return best;
 }
 
+function activePlayers(room) {
+  return room.players.filter(
+    player => !player.folded && player.hand.length === 2
+  );
+}
+
+function nextActiveIndex(room, fromIndex) {
+  const total = room.players.length;
+
+  for (let step = 1; step <= total; step++) {
+    const index = (fromIndex + step) % total;
+    const player = room.players[index];
+
+    if (player && !player.folded && player.hand.length === 2) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
 function calculateResults(room) {
-  const evaluated = room.players.map(player => {
+  const active = activePlayers(room);
+
+  const evaluated = active.map(player => {
     const result = evaluateSeven([
       ...player.hand,
       ...room.community
@@ -261,6 +284,137 @@ function calculateResults(room) {
   };
 }
 
+function finishWithOnePlayer(room) {
+  const remaining = activePlayers(room);
+
+  if (remaining.length !== 1) return false;
+
+  const winner = remaining[0];
+
+  room.results = {
+    winnerNames: [winner.name],
+    players: [{
+      id: winner.id,
+      name: winner.name,
+      handName: "Menang karena pemain lain fold",
+      winner: true
+    }]
+  };
+
+  room.stage = "showdown";
+  room.currentPlayerId = null;
+  room.message = winner.name + " menjadi pemenang!";
+  return true;
+}
+
+function beginStreet(room, stage) {
+  room.stage = stage;
+  room.acted = [];
+
+  const dealerIndex = room.players.findIndex(
+    player => player.id === room.dealerId
+  );
+
+  const firstIndex = nextActiveIndex(room, dealerIndex);
+
+  room.currentPlayerId = firstIndex >= 0
+    ? room.players[firstIndex].id
+    : null;
+
+  const labels = {
+    preflop: "Pre-Flop",
+    flop: "Flop",
+    turn: "Turn",
+    river: "River"
+  };
+
+  room.message = labels[stage] + ": giliran pemain dimulai.";
+}
+
+function advanceStreet(room) {
+  if (finishWithOnePlayer(room)) return;
+
+  const nextStages = {
+    preflop: "flop",
+    flop: "turn",
+    turn: "river",
+    river: "showdown"
+  };
+
+  const nextStage = nextStages[room.stage];
+
+  if (nextStage === "showdown") {
+    room.results = calculateResults(room);
+    room.stage = "showdown";
+    room.currentPlayerId = null;
+    room.message = "Showdown selesai. Pemenang telah ditentukan!";
+    return;
+  }
+
+  if (nextStage === "flop") {
+    room.deck.pop();
+    room.community.push(
+      room.deck.pop(),
+      room.deck.pop(),
+      room.deck.pop()
+    );
+  } else {
+    room.deck.pop();
+    room.community.push(room.deck.pop());
+  }
+
+  beginStreet(room, nextStage);
+}
+
+function processAction(room, player, action) {
+  if (room.stage === "waiting" || room.stage === "showdown") {
+    return "Ronde tidak sedang berlangsung.";
+  }
+
+  if (room.currentPlayerId !== player.id) {
+    return "Belum giliranmu.";
+  }
+
+  if (player.folded) {
+    return "Kamu sudah fold.";
+  }
+
+  if (action === "fold") {
+    player.folded = true;
+    room.message = player.name + " memilih FOLD.";
+  } else {
+    room.message = player.name + " memilih CHECK.";
+  }
+
+  if (!room.acted.includes(player.id)) {
+    room.acted.push(player.id);
+  }
+
+  if (finishWithOnePlayer(room)) return null;
+
+  const active = activePlayers(room);
+  const allActed = active.every(
+    item => room.acted.includes(item.id)
+  );
+
+  if (allActed) {
+    advanceStreet(room);
+    return null;
+  }
+
+  const currentIndex = room.players.findIndex(
+    item => item.id === player.id
+  );
+
+  const nextIndex = nextActiveIndex(room, currentIndex);
+
+  room.currentPlayerId = nextIndex >= 0
+    ? room.players[nextIndex].id
+    : null;
+
+  return null;
+}
+
 function sendUpdate(room) {
   io.to(room.code).emit("room:update", {
     round: room.round,
@@ -268,28 +422,45 @@ function sendUpdate(room) {
     message: room.message,
     community: room.community,
     results: room.results,
+    currentPlayerId: room.currentPlayerId,
+
     players: room.players.map(player => {
       const result = room.results?.players.find(
         item => item.id === player.id
       );
 
       return {
+        id: player.id,
         name: player.name,
         isDealer: player.id === room.dealerId,
         hasHand: player.hand.length === 2,
-        publicHand: room.stage === "showdown" ? player.hand : null,
+        folded: !!player.folded,
+        acted: room.acted.includes(player.id),
+        isTurn: player.id === room.currentPlayerId,
+        publicHand: room.stage === "showdown"
+          ? player.hand
+          : null,
         handName: result?.handName || null
       };
     })
   });
 
-  // Kartu pribadi hanya dikirim kepada pemiliknya,
-  // kecuali saat Showdown.
   room.players.forEach(player => {
-    io.to(player.id).emit(
-      "hand:update",
-      room.stage === "showdown" ? player.hand : player.hand
-    );
+    io.to(player.id).emit("hand:update", player.hand);
+  });
+}
+
+function resetRound(room) {
+  room.stage = "waiting";
+  room.deck = [];
+  room.community = [];
+  room.results = null;
+  room.currentPlayerId = null;
+  room.acted = [];
+
+  room.players.forEach(player => {
+    player.hand = [];
+    player.folded = false;
   });
 }
 
@@ -303,6 +474,9 @@ function removePlayer(socket) {
   const room = rooms.get(code);
   if (!room) return;
 
+  const wasDealer = room.dealerId === socket.id;
+  const wasCurrent = room.currentPlayerId === socket.id;
+
   room.players = room.players.filter(
     player => player.id !== socket.id
   );
@@ -312,24 +486,20 @@ function removePlayer(socket) {
     return;
   }
 
-  if (room.dealerId === socket.id) {
+  if (wasDealer) {
     room.dealerId = room.players[0].id;
-    room.message = "Dealer baru telah dipilih.";
-  } else {
-    room.message = "Seorang pemain meninggalkan room.";
   }
 
-  // Jika pemain keluar saat ronde berjalan,
-  // ronde harus dimulai ulang agar hasil tidak keliru.
   if (room.stage !== "waiting") {
-    room.stage = "waiting";
-    room.deck = [];
-    room.community = [];
-    room.results = null;
-    room.players.forEach(player => {
-      player.hand = [];
-    });
+    resetRound(room);
     room.message = "Pemain keluar. Ronde diatur ulang.";
+  } else if (wasCurrent) {
+    const index = room.players.length - 1;
+    const nextIndex = nextActiveIndex(room, index);
+    room.currentPlayerId = nextIndex >= 0
+      ? room.players[nextIndex].id
+      : null;
+    room.message = "Giliran dilanjutkan setelah pemain keluar.";
   }
 
   sendUpdate(room);
@@ -339,10 +509,7 @@ function dealerRoom(socket) {
   const room = rooms.get(socket.data.roomCode);
 
   if (!room || room.dealerId !== socket.id) {
-    socket.emit(
-      "error:notice",
-      "Hanya dealer yang dapat melakukan tindakan ini."
-    );
+    socket.emit("error:notice", "Hanya dealer yang dapat melakukan tindakan ini.");
     return null;
   }
 
@@ -352,7 +519,7 @@ function dealerRoom(socket) {
 io.on("connection", socket => {
   console.log("Pemain terhubung:", socket.id);
 
-  socket.on("room:create", (data = {}, callback) => {
+  socket.on("room:create", (data = {}) => {
     removePlayer(socket);
 
     const code = makeCode();
@@ -363,13 +530,16 @@ io.on("connection", socket => {
       players: [{
         id: socket.id,
         name: String(data.name || "Pemain").trim().slice(0, 18) || "Pemain",
-        hand: []
+        hand: [],
+        folded: false
       }],
       round: 1,
       stage: "waiting",
       deck: [],
       community: [],
       results: null,
+      currentPlayerId: null,
+      acted: [],
       message: "Room dibuat. Menunggu pemain lain."
     };
 
@@ -382,32 +552,25 @@ io.on("connection", socket => {
       isDealer: true
     });
 
-    if (typeof callback === "function") {
-      callback({ ok: true, code });
-    }
-
     sendUpdate(room);
   });
 
-  socket.on("room:join", (data = {}, callback) => {
+  socket.on("room:join", (data = {}) => {
     const code = String(data.code || "").trim().toUpperCase();
     const room = rooms.get(code);
 
     if (!room) {
       socket.emit("error:notice", "Room tidak ditemukan.");
-      if (typeof callback === "function") callback({ ok: false });
       return;
     }
 
     if (room.players.length >= 6) {
       socket.emit("error:notice", "Room sudah penuh (maksimal 6 pemain).");
-      if (typeof callback === "function") callback({ ok: false });
       return;
     }
 
     if (room.stage !== "waiting") {
       socket.emit("error:notice", "Ronde sedang berlangsung. Tunggu ronde berikutnya.");
-      if (typeof callback === "function") callback({ ok: false });
       return;
     }
 
@@ -416,7 +579,8 @@ io.on("connection", socket => {
     const player = {
       id: socket.id,
       name: String(data.name || "Pemain").trim().slice(0, 18) || "Pemain",
-      hand: []
+      hand: [],
+      folded: false
     };
 
     room.players.push(player);
@@ -429,10 +593,6 @@ io.on("connection", socket => {
       code,
       isDealer: false
     });
-
-    if (typeof callback === "function") {
-      callback({ ok: true, code });
-    }
 
     sendUpdate(room);
   });
@@ -449,73 +609,56 @@ io.on("connection", socket => {
     room.deck = makeDeck();
     room.community = [];
     room.results = null;
+    room.acted = [];
 
     room.players.forEach(player => {
+      player.folded = false;
       player.hand = [
         room.deck.pop(),
         room.deck.pop()
       ];
     });
 
-    room.stage = "preflop";
-    room.message = "Pre-Flop: dua kartu pribadi dibagikan.";
-
+    beginStreet(room, "preflop");
     sendUpdate(room);
   });
 
-  socket.on("dealer:flop", () => {
-    const room = dealerRoom(socket);
-    if (!room || room.stage !== "preflop") return;
+  socket.on("player:check", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room) return;
 
-    room.deck.pop();
-    room.community.push(
-      room.deck.pop(),
-      room.deck.pop(),
-      room.deck.pop()
+    const player = room.players.find(
+      item => item.id === socket.id
     );
 
-    room.stage = "flop";
-    room.message = "Flop: tiga kartu community dibuka.";
+    if (!player) return;
+
+    const error = processAction(room, player, "check");
+
+    if (error) {
+      socket.emit("error:notice", error);
+      return;
+    }
 
     sendUpdate(room);
   });
 
-  socket.on("dealer:turn", () => {
-    const room = dealerRoom(socket);
-    if (!room || room.stage !== "flop") return;
+  socket.on("player:fold", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room) return;
 
-    room.deck.pop();
-    room.community.push(room.deck.pop());
+    const player = room.players.find(
+      item => item.id === socket.id
+    );
 
-    room.stage = "turn";
-    room.message = "Turn: kartu community keempat dibuka.";
+    if (!player) return;
 
-    sendUpdate(room);
-  });
+    const error = processAction(room, player, "fold");
 
-  socket.on("dealer:river", () => {
-    const room = dealerRoom(socket);
-    if (!room || room.stage !== "turn") return;
-
-    room.deck.pop();
-    room.community.push(room.deck.pop());
-
-    room.stage = "river";
-    room.message = "River: kartu community kelima dibuka.";
-
-    sendUpdate(room);
-  });
-
-  socket.on("dealer:showdown", () => {
-    const room = dealerRoom(socket);
-    if (!room || room.stage !== "river") return;
-
-    room.results = calculateResults(room);
-    room.stage = "showdown";
-
-    room.message = room.results.winnerNames.length > 1
-      ? "Showdown selesai. Hasil seri!"
-      : "Showdown selesai. Pemenang telah ditentukan!";
+    if (error) {
+      socket.emit("error:notice", error);
+      return;
+    }
 
     sendUpdate(room);
   });
@@ -525,15 +668,7 @@ io.on("connection", socket => {
     if (!room || room.stage !== "showdown") return;
 
     room.round++;
-    room.stage = "waiting";
-    room.deck = [];
-    room.community = [];
-    room.results = null;
-
-    room.players.forEach(player => {
-      player.hand = [];
-    });
-
+    resetRound(room);
     room.message = "Ronde baru dimulai. Menunggu pembagian kartu.";
 
     sendUpdate(room);
@@ -548,4 +683,5 @@ io.on("connection", socket => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log("Joo Cards berjalan pada port " + PORT);
 });
+
 
