@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Joo Cards</title>
-  <link rel="stylesheet" href="/style.css?v=1004">
+  <link rel="stylesheet" href="/style.css?v=1005">
 </head>
 <body>
 <div class="shell">
@@ -93,17 +93,24 @@
         </div>
       </section>
 
+      <!-- PANEL DEALER -->
       <section id="dealerPanel" class="panel hidden">
         <h2>Panel Dealer</h2>
         <p>Dealer hanya mengelola room, membagikan kartu, dan memulai ronde. Dealer tidak menentukan taruhan pembuka.</p>
-
         <div id="dealerPlayers"></div>
+      </section>
 
+      <!-- KONTROL RONDE DIPISAH DARI PANEL DEALER -->
+      <section class="panel">
         <div id="startControls">
-          <button id="startRound" class="primary" type="button">MULAI RONDE</button>
+          <button id="startRound" class="primary" type="button">
+            MULAI RONDE
+          </button>
         </div>
 
-        <button id="nextRound" class="secondary hidden" type="button">RONDE BERIKUTNYA</button>
+        <button id="nextRound" class="secondary hidden" type="button">
+          RONDE BERIKUTNYA
+        </button>
       </section>
 
       <section class="table panel">
@@ -200,7 +207,8 @@
 
 </div>
 
-<script src="/socket.io/socket.io.js?v=1004"></script>
-<script src="/app.js?v=1004"></script>
+<script src="/socket.io/socket.io.js?v=1005"></script>
+<script src="/app.js?v=1005"></script>
 </body>
 </html>
+
