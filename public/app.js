@@ -1,4 +1,3 @@
- 
 (() => {
   "use strict";
 
@@ -9,25 +8,43 @@
   let isDealer = false;
   let isAI = false;
   let myId = "";
-  let lastRoom = null;
   let topupPlayerId = null;
+  let lastRoom = null;
+  let lastWinnerKey = "";
 
-  const nameInput = $("name");
-  const codeInput = $("code");
+  function visible(id, show) {
+    const el = $(id);
+    if (!el) return;
+
+    el.classList.toggle("hidden", !show);
+    el.style.display = show ? "" : "none";
+  }
 
   function toast(message) {
     const el = $("toast");
 
-    if (el) {
-      el.textContent = message;
-      el.classList.add("show");
-
-      setTimeout(() => {
-        el.classList.remove("show");
-      }, 2600);
-    } else {
+    if (!el) {
       alert(message);
+      return;
     }
+
+    el.textContent = message;
+    el.classList.add("show");
+
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => {
+      el.classList.remove("show");
+    }, 2600);
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[char]);
   }
 
   function connect() {
@@ -45,13 +62,15 @@
     });
 
     socket.on("connect", () => {
-      const status = $("connection");
-      if (status) status.textContent = "Terhubung";
+      if ($("connection")) {
+        $("connection").textContent = "TERHUBUNG";
+      }
     });
 
     socket.on("disconnect", () => {
-      const status = $("connection");
-      if (status) status.textContent = "Terputus";
+      if ($("connection")) {
+        $("connection").textContent = "TERPUTUS";
+      }
     });
 
     socket.on("toast", toast);
@@ -60,20 +79,31 @@
       roomCode = data.code;
       isDealer = !!data.isDealer;
       isAI = !!data.aiMode;
+      lastWinnerKey = "";
 
       if ($("roomCode")) {
         $("roomCode").textContent = roomCode;
       }
 
-      showGame();
-      updateControls();
+      if ($("editName")) {
+        $("editName").value = $("name")?.value || "";
+      }
+
+      visible("lobby", false);
+      visible("game", true);
+      visible("dealerPanel", isDealer);
+      visible("startControls", isDealer);
+      visible("topupControls", false);
+
+      updateDealerUI();
     });
 
-    socket.on("room:update", renderRoom);
+    socket.on("room:update", room => {
+      renderRoom(room);
+    });
 
     socket.on("dealer:update", data => {
-      if (!isDealer) return;
-      renderDealer(data);
+      if (isDealer) renderDealer(data);
     });
 
     socket.on("topup:request", data => {
@@ -83,76 +113,23 @@
 
     socket.on("room:closed", () => {
       toast("Room telah ditutup.");
-      location.reload();
+      setTimeout(() => location.reload(), 1000);
     });
   }
 
-  function showGame() {
-    if ($("lobby")) $("lobby").style.display = "none";
-    if ($("game")) $("game").style.display = "block";
+  function updateDealerUI() {
+    visible("dealerPanel", isDealer);
+    visible("startControls", isDealer);
+    visible("startRound", isDealer);
+    visible("nextRound", false);
 
-    if ($("dealerPanel")) {
-      $("dealerPanel").style.display = isDealer ? "block" : "none";
+    if ($("dealerIndicator")) {
+      $("dealerIndicator").style.display = "flex";
     }
-
-    if ($("topupControls")) {
-      $("topupControls").style.display = isAI ? "block" : "none";
-    }
-
-    if ($("startControls")) {
-      $("startControls").style.display = isDealer ? "block" : "none";
-    }
-
-    updateControls();
-  }
-
-  function updateControls() {
-    const start = $("startRound");
-    const next = $("nextRound");
-
-    if (start) {
-      start.style.display = isDealer ? "inline-flex" : "none";
-    }
-
-    if (next) {
-      next.style.display = isDealer ? "inline-flex" : "none";
-    }
-
-    if ($("dealerPanel")) {
-      $("dealerPanel").style.display = isDealer ? "block" : "none";
-    }
-  }
-
-  function makeAIButton() {
-    if (!$("join") || $("createAI")) return;
-
-    const button = document.createElement("button");
-    button.id = "createAI";
-    button.type = "button";
-    button.className = $("create").className;
-    button.textContent = "VS AI";
-
-    $("join").insertAdjacentElement("afterend", button);
-
-    button.addEventListener("click", () => {
-      if (!socket || !socket.connected) {
-        toast("Menunggu koneksi...");
-        return;
-      }
-
-      socket.emit("room:create-ai", {
-        difficulty: "normal",
-        aiCount: 4
-      });
-    });
-  }
-
-  function getName() {
-    return nameInput?.value.trim() || "Player";
   }
 
   function createRoom() {
-    if (!socket || !socket.connected) {
+    if (!socket?.connected) {
       toast("Koneksi belum siap.");
       return;
     }
@@ -160,13 +137,39 @@
     socket.emit("room:create");
   }
 
-  function joinRoom() {
-    if (!socket || !socket.connected) {
+  function createAIRoom() {
+    if (!socket?.connected) {
       toast("Koneksi belum siap.");
       return;
     }
 
-    const code = codeInput?.value.trim().toUpperCase();
+    const button = $("createAI");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "MEMBUAT ROOM AI...";
+    }
+
+    socket.emit("room:create-ai", {
+      name: $("name")?.value.trim() || "Player",
+      difficulty: "normal",
+      aiCount: 4
+    });
+
+    setTimeout(() => {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "VS AI — 4 BOT";
+      }
+    }, 2500);
+  }
+
+  function joinRoom() {
+    if (!socket?.connected) {
+      toast("Koneksi belum siap.");
+      return;
+    }
+
+    const code = $("code")?.value.trim().toUpperCase();
 
     if (!code) {
       toast("Masukkan kode room.");
@@ -175,7 +178,7 @@
 
     socket.emit("room:join", {
       code,
-      name: getName()
+      name: $("name")?.value.trim() || "Player"
     });
   }
 
@@ -185,25 +188,13 @@
     }
 
     const red = card.suit === "♥" || card.suit === "♦";
+
     return `
       <div class="playing-card ${red ? "red" : "black"}">
-        <span>${card.rank}</span>
-        <span>${card.suit}</span>
+        <span>${escapeHTML(card.rank)}</span>
+        <span>${escapeHTML(card.suit)}</span>
       </div>
     `;
-  }
-
-  function renderCards(target, cards, hidden = false) {
-    if (!target) return;
-
-    target.innerHTML = "";
-
-    (cards || []).forEach(card => {
-      target.insertAdjacentHTML(
-        "beforeend",
-        cardHTML(card, hidden)
-      );
-    });
   }
 
   function renderPlayers(room) {
@@ -212,49 +203,67 @@
 
     container.innerHTML = "";
 
-    room.players.forEach((player, index) => {
+    room.players.forEach(player => {
       const isMe = player.id === myId;
       const isTurn = player.id === room.turnId;
-      const cards = player.hand || [];
 
       const avatar = player.avatar
-        ? `<img src="${player.avatar}" alt="">`
-        : `<span class="avatar-placeholder">${escapeHTML(player.name[0] || "?")}</span>`;
+        ? `<img src="${player.avatar}" alt="Foto profil">`
+        : `<span class="avatar-placeholder">${escapeHTML((player.name || "?")[0])}</span>`;
 
-      const playerElement = document.createElement("div");
-      playerElement.className = [
+      const cards = player.hand || [];
+
+      const showCards =
+        isMe ||
+        (room.phase === "showdown" && !player.folded);
+
+      const cardsHTML = showCards
+        ? cards.map(card => cardHTML(card)).join("")
+        : (room.phase !== "waiting"
+          ? cardHTML(null, true) + cardHTML(null, true)
+          : "");
+
+      const seat = document.createElement("div");
+
+      seat.className = [
         "player-seat",
         isMe ? "my-seat" : "",
         isTurn ? "active-turn" : "",
         player.folded ? "folded" : "",
         player.isAI ? "ai-player" : ""
-      ].join(" ");
+      ].filter(Boolean).join(" ");
 
-      playerElement.innerHTML = `
+      seat.innerHTML = `
         <div class="player-avatar">${avatar}</div>
+
         <div class="player-info">
           <strong>${escapeHTML(player.name)}</strong>
-          ${player.isAI ? '<small class="ai-label">AI</small>' : ""}
-          ${isMe ? '<small>YOU</small>' : ""}
-          ${player.isDealer ? '<small>DEALER</small>' : ""}
-          ${player.folded ? '<small>FOLD</small>' : ""}
-          ${player.allIn ? '<small>ALL IN</small>' : ""}
+
+          ${player.isAI ? '<small class="ai-label">AI NORMAL</small>' : ""}
+          ${isMe ? "<small>YOU</small>" : ""}
+          ${player.isDealer ? "<small>DEALER</small>" : ""}
+          ${player.folded ? "<small>FOLD</small>" : ""}
+          ${player.allIn ? "<small>ALL IN</small>" : ""}
+
           <div class="player-chips">${player.chips} chip</div>
-          ${player.bet > 0 ? `<div class="player-bet">Bet: ${player.bet}</div>` : ""}
-        </div>
-        <div class="player-cards">
+
           ${
-            cards.length
-              ? cards.map(c => cardHTML(c)).join("")
-              : room.phase !== "waiting"
-                ? cardHTML(null, true) + cardHTML(null, true)
-                : ""
+            player.bet > 0
+              ? `<div class="player-bet">Bet: ${player.bet}</div>`
+              : ""
           }
         </div>
+
+        <div class="player-cards">${cardsHTML}</div>
       `;
 
-      container.appendChild(playerElement);
+      container.appendChild(seat);
     });
+
+    const felt = $("feltLayout");
+    if (felt) {
+      felt.dataset.count = String(room.players.length);
+    }
   }
 
   function renderCommunity(room) {
@@ -263,17 +272,21 @@
 
     target.innerHTML = "";
 
+    if (room.phase === "waiting") {
+      target.innerHTML =
+        '<span class="placeholder">Menunggu kartu meja</span>';
+      return;
+    }
+
     (room.community || []).forEach(card => {
       target.insertAdjacentHTML("beforeend", cardHTML(card));
     });
 
-    if (room.phase !== "waiting") {
-      for (let i = room.community.length; i < 5; i++) {
-        target.insertAdjacentHTML(
-          "beforeend",
-          `<div class="playing-card card-empty"></div>`
-        );
-      }
+    for (let i = room.community.length; i < 5; i++) {
+      target.insertAdjacentHTML(
+        "beforeend",
+        '<div class="playing-card card-empty"></div>'
+      );
     }
   }
 
@@ -281,45 +294,60 @@
     const target = $("myHand");
     if (!target) return;
 
-    const me = room.players.find(p => p.id === myId);
-    renderCards(target, me?.hand || []);
+    const me = room.players.find(player => player.id === myId);
+
+    if (!me || !me.hand?.length) {
+      target.innerHTML =
+        '<span class="placeholder">Menunggu pembagian kartu</span>';
+      return;
+    }
+
+    target.innerHTML = me.hand
+      .map(card => cardHTML(card))
+      .join("");
   }
 
   function renderPot(room) {
     if ($("pot")) $("pot").textContent = room.pot ?? 0;
-    if ($("potDisplay")) $("potDisplay").textContent = room.pot ?? 0;
+    if ($("potDisplay")) $("potDisplay").dataset.total = room.pot ?? 0;
+
     if ($("currentBet")) {
       $("currentBet").textContent = room.currentBet ?? 0;
     }
 
     if ($("round")) {
-      $("round").textContent = room.round
-        ? `Ronde ${room.round}`
-        : "Menunggu ronde";
+      $("round").textContent = room.round || 0;
     }
 
     if ($("status")) {
-      $("status").textContent = room.phase === "waiting"
-        ? "Menunggu permainan"
-        : room.phase === "showdown"
-          ? "Ronde selesai"
-          : `Tahap ${room.phase}`;
+      const labels = {
+        waiting: "Menunggu permainan",
+        preflop: "Pre-Flop",
+        flop: "Flop",
+        turn: "Turn",
+        river: "River",
+        showdown: "Showdown"
+      };
+
+      $("status").textContent =
+        labels[room.phase] || room.phase;
     }
 
     if ($("turnInfo")) {
-      const current = room.players.find(p => p.id === room.turnId);
+      const current = room.players.find(
+        player => player.id === room.turnId
+      );
 
       $("turnInfo").textContent = current
         ? `Giliran: ${current.name}`
-        : "";
+        : room.phase === "showdown"
+          ? "Ronde selesai"
+          : "Menunggu ronde dimulai.";
     }
   }
 
-  function renderActionControls(room) {
-    const controls = $("actionControls");
-    if (!controls) return;
-
-    const me = room.players.find(p => p.id === myId);
+  function renderActions(room) {
+    const me = room.players.find(player => player.id === myId);
 
     const myTurn = !!(
       me &&
@@ -330,24 +358,23 @@
       room.phase !== "showdown"
     );
 
-    controls.style.display = myTurn ? "flex" : "none";
+    visible("actionControls", myTurn);
 
     if (!myTurn) return;
 
     const toCall = Math.max(0, room.currentBet - me.bet);
 
-    if ($("call")) {
-      $("call").textContent = toCall > 0
-        ? `CALL ${Math.min(toCall, me.chips)}`
-        : "CHECK";
-    }
-
-    if ($("check")) {
-      $("check").style.display = toCall === 0 ? "inline-flex" : "none";
-    }
+    visible("check", toCall === 0);
+    visible("call", toCall > 0);
 
     if ($("call")) {
-      $("call").style.display = toCall > 0 ? "inline-flex" : "none";
+      $("call").textContent =
+        `CALL ${Math.min(toCall, me.chips)}`;
+    }
+
+    if ($("raiseTo")) {
+      $("raiseTo").min = String(room.currentBet + 1);
+      $("raiseTo").max = String(me.bet + me.chips);
     }
 
     if ($("raise")) {
@@ -356,77 +383,6 @@
 
     if ($("allin")) {
       $("allin").disabled = me.chips <= 0;
-    }
-  }
-
-  function renderResults(room) {
-    if (room.phase !== "showdown" || !room.results?.length) return;
-
-    const winner = room.results
-      .flatMap(result => result.winners || [])
-      .join(", ");
-
-    if ($("winnerText")) {
-      $("winnerText").textContent = `Pemenang: ${winner}`;
-    }
-
-    if ($("popupWinner")) {
-      $("popupWinner").textContent = winner;
-    }
-
-    if ($("popupHand")) {
-      $("popupHand").textContent = room.results
-        .map(result => `${result.hand} — ${result.amount} chip`)
-        .join(" | ");
-    }
-
-    const popup = $("winnerPopup");
-    if (popup) popup.style.display = "flex";
-
-    const ranking = $("rankingList");
-    if (ranking) {
-      ranking.innerHTML = "";
-
-      [...room.players]
-        .sort((a, b) => b.chips - a.chips)
-        .forEach((p, index) => {
-          ranking.insertAdjacentHTML(
-            "beforeend",
-            `<li>${index + 1}. ${escapeHTML(p.name)} — ${p.chips} chip</li>`
-          );
-        });
-    }
-  }
-
-  function renderRoom(room) {
-    lastRoom = room;
-
-    renderPlayers(room);
-    renderCommunity(room);
-    renderMyHand(room);
-    renderPot(room);
-    renderActionControls(room);
-    renderResults(room);
-
-    const me = room.players.find(p => p.id === myId);
-
-    if ($("topupControls")) {
-      $("topupControls").style.display =
-        me && me.chips <= 0 ? "block" : "none";
-    }
-
-    if ($("startRound")) {
-      $("startRound").style.display =
-        isDealer && (room.phase === "waiting" || room.phase === "showdown")
-          ? "inline-flex"
-          : "none";
-    }
-
-    if ($("nextRound")) {
-      $("nextRound").style.display =
-        isDealer && room.phase === "showdown"
-          ? "inline-flex"
-          : "none";
     }
   }
 
@@ -440,20 +396,99 @@
       const row = document.createElement("div");
       row.className = "dealer-player-row";
 
-      row.innerHTML = `
-        <span>
-          ${escapeHTML(player.name)}
-          ${player.isAI ? "(AI)" : ""}
-          — ${player.chips} chip
-        </span>
-      `;
+      row.textContent =
+        `${player.name}${player.isAI ? " (AI)" : ""} — ${player.chips} chip`;
 
       target.appendChild(row);
     });
   }
 
-  function sendAction(action, amount) {
-    if (!socket || !socket.connected) return;
+  function renderResults(room) {
+    if (room.phase !== "showdown" || !room.results?.length) {
+      visible("results", false);
+      return;
+    }
+
+    const winnerNames = room.results
+      .flatMap(result => result.winners || []);
+
+    const winnerText = [...new Set(winnerNames)].join(", ");
+
+    if ($("winnerText")) {
+      $("winnerText").textContent = `Pemenang: ${winnerText}`;
+    }
+
+    if ($("popupWinner")) {
+      $("popupWinner").textContent = winnerText;
+    }
+
+    if ($("popupHand")) {
+      $("popupHand").textContent = room.results
+        .map(result =>
+          `${result.hand} — ${result.amount} chip`
+        )
+        .join(" | ");
+    }
+
+    const ranking = $("rankingList");
+
+    if (ranking) {
+      ranking.innerHTML = "";
+
+      [...room.players]
+        .sort((a, b) => b.chips - a.chips)
+        .forEach((player, index) => {
+          const item = document.createElement("div");
+          item.textContent =
+            `${index + 1}. ${player.name} — ${player.chips} chip`;
+
+          ranking.appendChild(item);
+        });
+    }
+
+    visible("results", true);
+
+    const key = `${room.round}-${winnerText}`;
+
+    if (key !== lastWinnerKey) {
+      lastWinnerKey = key;
+      visible("winnerPopup", true);
+    }
+  }
+
+  function renderRoom(room) {
+    lastRoom = room;
+
+    renderPlayers(room);
+    renderCommunity(room);
+    renderMyHand(room);
+    renderPot(room);
+    renderActions(room);
+    renderResults(room);
+
+    const me = room.players.find(player => player.id === myId);
+
+    visible(
+      "topupControls",
+      !!me && me.chips <= 0 && room.phase === "waiting"
+    );
+
+    visible(
+      "startRound",
+      isDealer &&
+      (room.phase === "waiting" || room.phase === "showdown")
+    );
+
+    visible(
+      "nextRound",
+      isDealer && room.phase === "showdown"
+    );
+
+    visible("dealerPanel", isDealer);
+  }
+
+  function sendAction(action, amount = 0) {
+    if (!socket?.connected) return;
 
     socket.emit("player:action", {
       action,
@@ -462,110 +497,17 @@
   }
 
   function showTopupPopup(name) {
-    const popup = $("topupPopup");
-
     if ($("topupText")) {
       $("topupText").textContent =
-        `${name} meminta tambahan chip virtual.`;
+        `${name} meminta tambahan 10 chip virtual.`;
     }
 
-    if (popup) popup.style.display = "flex";
+    visible("topupPopup", true);
   }
 
   function closeTopupPopup() {
-    const popup = $("topupPopup");
-    if (popup) popup.style.display = "none";
+    visible("topupPopup", false);
     topupPlayerId = null;
-  }
-
-  function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, char => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-    })[char]);
-  }
-
-  function bind(id, event, callback) {
-    const element = $(id);
-    if (element) element.addEventListener(event, callback);
-  }
-
-  function bindButtons() {
-    bind("create", "click", createRoom);
-    bind("join", "click", joinRoom);
-
-    bind("startRound", "click", () => {
-      socket?.emit("dealer:start");
-    });
-
-    bind("nextRound", "click", () => {
-      socket?.emit("dealer:next");
-      const popup = $("winnerPopup");
-      if (popup) popup.style.display = "none";
-    });
-
-    bind("fold", "click", () => sendAction("fold"));
-    bind("check", "click", () => sendAction("check"));
-    bind("call", "click", () => sendAction("call"));
-    bind("allin", "click", () => sendAction("allin"));
-
-    bind("raise", "click", () => {
-      const value = Number($("raiseTo")?.value || 0);
-      sendAction("raise", value);
-    });
-
-    bind("topupRequest", "click", () => {
-      socket?.emit("player:topup-request");
-    });
-
-    bind("topupRequest", "click", () => {
-      socket?.emit("player:topup-request");
-    });
-
-    bind("approveTopup", "click", () => {
-      if (!topupPlayerId) return;
-
-      socket?.emit("dealer:topup-approve", {
-        id: topupPlayerId
-      });
-
-      closeTopupPopup();
-    });
-
-    bind("closeTopup", "click", closeTopupPopup);
-
-    bind("closePopup", "click", () => {
-      const popup = $("winnerPopup");
-      if (popup) popup.style.display = "none";
-    });
-
-    bind("copy", "click", async () => {
-      try {
-        await navigator.clipboard.writeText(roomCode);
-        toast("Kode room berhasil disalin.");
-      } catch {
-        toast(`Kode room: ${roomCode}`);
-      }
-    });
-
-    bind("saveProfile", "click", () => {
-      const name = $("editName")?.value.trim();
-
-      if (name) {
-        socket?.emit("player:profile", { name });
-      }
-
-      toast("Profil diperbarui.");
-    });
-
-    bind("editName", "keydown", event => {
-      if (event.key === "Enter") {
-        $("saveProfile")?.click();
-      }
-    });
   }
 
   function setupAvatar(inputId, previewId) {
@@ -612,8 +554,11 @@
           const avatar = canvas.toDataURL("image/jpeg", 0.75);
 
           if (preview) {
-            preview.src = avatar;
-            preview.style.display = "block";
+            preview.innerHTML = "";
+            const img = document.createElement("img");
+            img.src = avatar;
+            img.alt = "Foto profil";
+            preview.appendChild(img);
           }
 
           socket?.emit("player:profile", { avatar });
@@ -626,14 +571,92 @@
     });
   }
 
+  function bind(id, event, callback) {
+    const element = $(id);
+    if (element) {
+      element.addEventListener(event, callback);
+    }
+  }
+
+  function bindButtons() {
+    bind("create", "click", createRoom);
+    bind("createAI", "click", createAIRoom);
+    bind("join", "click", joinRoom);
+
+    bind("startRound", "click", () => {
+      socket?.emit("dealer:start");
+    });
+
+    bind("nextRound", "click", () => {
+      socket?.emit("dealer:next");
+      visible("winnerPopup", false);
+      lastWinnerKey = "";
+    });
+
+    bind("fold", "click", () => sendAction("fold"));
+    bind("check", "click", () => sendAction("check"));
+    bind("call", "click", () => sendAction("call"));
+    bind("allin", "click", () => sendAction("allin"));
+
+    bind("raise", "click", () => {
+      const amount = Number($("raiseTo")?.value || 0);
+      sendAction("raise", amount);
+    });
+
+    bind("topupRequest", "click", () => {
+      socket?.emit("player:topup-request");
+    });
+
+    bind("approveTopup", "click", () => {
+      if (!topupPlayerId) return;
+
+      socket?.emit("dealer:topup-approve", {
+        id: topupPlayerId
+      });
+
+      closeTopupPopup();
+    });
+
+    bind("closeTopup", "click", closeTopupPopup);
+
+    bind("closePopup", "click", () => {
+      visible("winnerPopup", false);
+    });
+
+    bind("copy", "click", async () => {
+      try {
+        await navigator.clipboard.writeText(roomCode);
+        toast("Kode room berhasil disalin.");
+      } catch {
+        toast(`Kode room: ${roomCode}`);
+      }
+    });
+
+    bind("saveProfile", "click", () => {
+      const name = $("editName")?.value.trim();
+
+      if (!name) {
+        toast("Nama tidak boleh kosong.");
+        return;
+      }
+
+      socket?.emit("player:profile", { name });
+      toast("Profil diperbarui.");
+    });
+  }
+
   function init() {
-    connect();
-    makeAIButton();
     bindButtons();
 
     setupAvatar("avatarInput", "lobbyAvatarPreview");
     setupAvatar("roomAvatarInput", "roomAvatarPreview");
+
+    connect();
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
