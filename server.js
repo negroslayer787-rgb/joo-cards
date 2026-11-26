@@ -670,7 +670,6 @@ function completeAction(room, player, action, raiseTo) {
 
     room.currentBet = target;
 
-    // Semua pemain aktif selain raiser harus mendapat giliran lagi.
     setPending(room, player.id);
 
     room.message =
@@ -688,8 +687,6 @@ function completeAction(room, player, action, raiseTo) {
 
     if (target > room.currentBet) {
       room.currentBet = target;
-
-      // Semua pemain aktif lain harus merespons All-in.
       setPending(room, player.id);
     } else {
       room.pending.delete(player.id);
@@ -702,15 +699,10 @@ function completeAction(room, player, action, raiseTo) {
     return "Aksi tidak dikenal.";
   }
 
-  // Big Blind membuka taruhan terlebih dahulu.
-  // Jika BB Raise atau All-in, Small Blind otomatis Call.
   applyBigBlindOpening(room, player, action);
 
   if (finishByFold(room)) return null;
 
-  // Pemain yang All-in tidak perlu bertindak.
-  // Jika hanya satu pemain yang masih bisa bertindak,
-  // seluruh kartu meja dibuka otomatis.
   if (actionablePlayers(room).length <= 1) {
     dealRemainingBoard(room);
     finishShowdown(room);
@@ -1005,6 +997,10 @@ io.on("connection", socket => {
     room.deck = makeDeck();
     room.community = [];
     room.results = null;
+
+    // PERBAIKAN: status harus berubah agar tombol aksi aktif.
+    room.stage = "preflop";
+
     room.currentBet = 0;
     room.pending.clear();
 
@@ -1026,8 +1022,6 @@ io.on("connection", socket => {
     room.smallBlindId = sb.id;
     room.bigBlindId = bb.id;
 
-    // Tidak ada taruhan wajib dari dealer.
-    // Big Blind menentukan taruhan pembuka sendiri.
     room.openingPending = true;
 
     room.blindCursor = (sbIndex + 1) % count;
