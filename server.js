@@ -1,4 +1,5 @@
-    "use strict";
+
+"use strict";
 
 const express = require("express");
 const http = require("http");
@@ -24,6 +25,7 @@ const RANKS = [
 
 function makeDeck() {
   const deck = [];
+
   for (const suit of SUITS) {
     for (let i = 0; i < RANKS.length; i++) {
       deck.push({ rank: RANKS[i], value: i + 2, suit });
@@ -40,9 +42,11 @@ function makeDeck() {
 
 function makeCode() {
   let code;
+
   do {
     code = Math.random().toString(36).slice(2, 6).toUpperCase();
   } while (rooms.has(code));
+
   return code;
 }
 
@@ -83,7 +87,7 @@ function publicPlayer(p) {
     folded: p.folded,
     allIn: p.allIn,
     isAI: !!p.isAI,
-    isDealer: !!p.isDealer,
+    isDealer: false,
     isTurn: false
   };
 }
@@ -95,11 +99,16 @@ function roomSnapshot(room, viewerId) {
     code: room.code,
     aiMode: room.aiMode,
     difficulty: room.difficulty,
+    dealerName: room.aiMode ? "AI DEALER" : "Dealer",
     players: room.players.map(p => ({
       ...publicPlayer(p),
-      hand: p.id === viewerId || p.isAI
+      hand: p.id === viewerId
         ? p.hand
-        : (room.phase === "showdown" && !p.folded ? p.hand : [])
+        : (
+          room.phase === "showdown" && !p.folded
+            ? p.hand
+            : []
+        )
     })),
     community: room.community,
     pot: potTotal(room),
@@ -128,22 +137,27 @@ function broadcast(room) {
     }
   }
 
-  io.to(room.dealerId).emit("dealer:update", {
-    code: room.code,
-    players: room.players.map(publicPlayer),
-    phase: room.phase,
-    started: room.started,
-    aiMode: room.aiMode
-  });
+  // Hanya dealer manusia pada room multiplayer yang menerima panel dealer.
+  if (!room.aiMode && room.dealerId) {
+    io.to(room.dealerId).emit("dealer:update", {
+      code: room.code,
+      players: room.players.map(publicPlayer),
+      phase: room.phase,
+      started: room.started,
+      aiMode: false
+    });
+  }
 }
 
 function pay(player, amount) {
   amount = Math.max(0, Math.min(player.chips, Math.floor(amount)));
+
   player.chips -= amount;
   player.bet += amount;
   player.totalBet += amount;
 
   if (player.chips === 0) player.allIn = true;
+
   return amount;
 }
 
@@ -152,6 +166,7 @@ function nextIndex(room, fromIndex, predicate) {
 
   for (let step = 1; step <= count; step++) {
     const index = (fromIndex + step) % count;
+
     if (predicate(room.players[index])) return index;
   }
 
@@ -170,6 +185,7 @@ function setNextTurn(room, fromIndex) {
 
 function resetBets(room) {
   room.currentBet = 0;
+
   room.players.forEach(p => {
     p.bet = 0;
     p.acted = false;
@@ -196,7 +212,8 @@ function startRound(room) {
   const eligible = room.players.filter(p => p.chips > 0);
 
   if (eligible.length < 2) {
-    io.to(room.dealerId).emit("toast", "Minimal perlu 2 pemain dengan chip.");
+    const target = room.aiMode ? room.hostId : room.dealerId;
+    if (target) io.to(target).emit("toast", "Minimal perlu 2 pemain dengan chip.");
     return;
   }
 
@@ -218,11 +235,14 @@ function startRound(room) {
   });
 
   const active = room.players.filter(p => !p.folded);
+
   active.forEach(p => {
     p.hand = [room.deck.pop(), room.deck.pop()];
   });
 
-  // Small blind and big blind use 1 and 2 virtual chips.
+  // Dealer button berputar di antara pemain yang masih memiliki chip.
+  room.dealerIndex = room.dealerIndex % active.length;
+
   const sbIndex = room.dealerIndex % active.length;
   const bbIndex = (sbIndex + 1) % active.length;
 
@@ -231,13 +251,15 @@ function startRound(room) {
 
   pay(sb, 1);
   pay(bb, 2);
-  room.currentBet = Math.max(sb.bet, bb.bet);
 
-  // Big blind acts first in this project's opening-bet format.
+  room.currentBet = Math.max(sb.bet, bb.bet);
   room.turnId = bb.id;
 
-  if (room.aiMode) scheduleAI(room, 900);
+  room.dealerIndex = (room.dealerIndex + 1) % active.length;
+
   broadcast(room);
+
+  if (room.aiMode) scheduleAI(room, 900);
 }
 
 function combinations(items, size) {
@@ -287,17 +309,22 @@ function scoreFive(cards) {
   }
 
   if (flush && straightHigh) return [8, straightHigh];
+
   if (groups[0].count === 4) {
     return [7, groups[0].value, groups[1].value];
   }
+
   if (groups[0].count === 3 && groups[1].count === 2) {
     return [6, groups[0].value, groups[1].value];
   }
+
   if (flush) return [5, ...values];
   if (straightHigh) return [4, straightHigh];
+
   if (groups[0].count === 3) {
     return [3, groups[0].value, ...groups.slice(1).map(g => g.value)];
   }
+
   if (groups[0].count === 2 && groups[1].count === 2) {
     return [
       2,
@@ -306,6 +333,7 @@ function scoreFive(cards) {
       groups[2].value
     ];
   }
+
   if (groups[0].count === 2) {
     return [1, groups[0].value, ...groups.slice(1).map(g => g.value)];
   }
@@ -320,10 +348,7 @@ function evaluateHand(cards) {
   for (const set of fiveCardSets) {
     const score = scoreFive(set);
 
-    if (
-      !best ||
-      compareScore(score, best) > 0
-    ) {
+    if (!best || compareScore(score, best) > 0) {
       best = score;
     }
   }
@@ -426,6 +451,7 @@ function finishRound(room) {
 
   room.phase = "showdown";
   room.turnId = null;
+
   awardPots(room);
   broadcast(room);
 }
@@ -434,9 +460,11 @@ function finishByFold(room) {
   const winner = alive(room)[0];
 
   if (winner) {
-    winner.chips += potTotal(room);
+    const amount = potTotal(room);
+    winner.chips += amount;
+
     room.results = [{
-      amount: potTotal(room),
+      amount,
       winners: [winner.name],
       hand: "Last player standing"
     }];
@@ -471,7 +499,10 @@ function advanceStreet(room) {
 
   resetBets(room);
 
-  const first = room.players.findIndex(p => !p.folded && !p.allIn);
+  const first = room.players.findIndex(
+    p => !p.folded && !p.allIn && p.chips > 0
+  );
+
   room.turnId = first < 0 ? null : room.players[first].id;
 
   if (!room.turnId) {
@@ -480,14 +511,18 @@ function advanceStreet(room) {
   }
 
   broadcast(room);
+
   if (room.aiMode) scheduleAI(room, 850);
 }
 
 function bettingComplete(room) {
   const able = canAct(room);
 
-  if (able.length <= 1) {
-    return able.every(p => p.acted || p.bet === room.currentBet);
+  if (able.length === 0) return true;
+
+  if (able.length === 1) {
+    const only = able[0];
+    return only.acted || only.bet === room.currentBet;
   }
 
   return able.every(p => p.acted && p.bet === room.currentBet);
@@ -511,7 +546,11 @@ function applyAction(room, player, action, amount = 0) {
     pay(player, toCall);
     player.acted = true;
   } else if (action === "raise") {
-    const target = Math.max(room.currentBet + 1, Math.floor(Number(amount) || 0));
+    const target = Math.max(
+      room.currentBet + 1,
+      Math.floor(Number(amount) || 0)
+    );
+
     const needed = target - player.bet;
 
     if (needed <= 0 || player.chips <= 0) return;
@@ -520,6 +559,7 @@ function applyAction(room, player, action, amount = 0) {
 
     if (player.bet > room.currentBet) {
       room.currentBet = player.bet;
+
       room.players.forEach(p => {
         if (p.id !== player.id && !p.folded && !p.allIn) {
           p.acted = false;
@@ -532,10 +572,12 @@ function applyAction(room, player, action, amount = 0) {
     if (paid === 0) return;
   } else if (action === "allin") {
     const oldBet = room.currentBet;
+
     pay(player, player.chips);
 
     if (player.bet > oldBet) {
       room.currentBet = player.bet;
+
       room.players.forEach(p => {
         if (p.id !== player.id && !p.folded && !p.allIn) {
           p.acted = false;
@@ -571,7 +613,6 @@ function aiDecision(room, bot) {
   const suited = bot.hand[0].suit === bot.hand[1].suit;
   const difficulty = room.difficulty || "normal";
 
-  // A simple, deliberately non-perfect Normal AI.
   const strength =
     (pair ? 4 : 0) +
     (highCard >= 12 ? 2 : 0) +
@@ -581,8 +622,12 @@ function aiDecision(room, bot) {
 
   if (toCall === 0) {
     if (strength >= 6 && bot.chips > 2 && Math.random() < 0.2) {
-      return { action: "raise", amount: room.currentBet + 2 };
+      return {
+        action: "raise",
+        amount: room.currentBet + 2
+      };
     }
+
     return { action: "check" };
   }
 
@@ -616,12 +661,24 @@ function scheduleAI(room, delay = 900) {
   const bot = getPlayer(room, room.turnId);
   if (!bot || !bot.isAI) return;
 
-  setTimeout(() => {
-    const currentRoom = rooms.get(room.code);
-    if (!currentRoom || currentRoom.turnId !== bot.id) return;
+  const code = room.code;
+  const botId = bot.id;
 
-    const decision = aiDecision(currentRoom, bot);
-    applyAction(currentRoom, bot, decision.action, decision.amount);
+  setTimeout(() => {
+    const currentRoom = rooms.get(code);
+    if (!currentRoom || currentRoom.turnId !== botId) return;
+
+    const currentBot = getPlayer(currentRoom, botId);
+    if (!currentBot || !currentBot.isAI) return;
+
+    const decision = aiDecision(currentRoom, currentBot);
+
+    applyAction(
+      currentRoom,
+      currentBot,
+      decision.action,
+      decision.amount
+    );
   }, delay);
 }
 
@@ -629,21 +686,27 @@ function getRoomBySocket(socketId) {
   for (const room of rooms.values()) {
     if (
       room.dealerId === socketId ||
+      room.hostId === socketId ||
       room.players.some(p => p.id === socketId)
-    ) return room;
+    ) {
+      return room;
+    }
   }
+
   return null;
 }
 
-function createRoom(socket, aiMode = false) {
+function createRoom(socket, aiMode = false, data = {}) {
   const code = makeCode();
 
   const room = {
     code,
-    dealerId: socket.id,
+    // Pada VS AI, dealer adalah sistem AI, bukan socket pemain.
+    dealerId: aiMode ? null : socket.id,
+    hostId: aiMode ? socket.id : null,
     players: [],
     aiMode,
-    difficulty: "normal",
+    difficulty: data?.difficulty || "normal",
     started: false,
     round: 0,
     phase: "waiting",
@@ -656,10 +719,16 @@ function createRoom(socket, aiMode = false) {
   };
 
   if (aiMode) {
-    const human = createPlayer(socket.id, "Player");
-    human.isDealer = true;
+    const human = createPlayer(
+      socket.id,
+      cleanName(data?.name || "Player")
+    );
+
+    human.avatar = cleanAvatar(data?.avatar);
+    human.isDealer = false;
     room.players.push(human);
 
+    // Empat AI ini adalah pemain, bukan dealer.
     ["Astra", "Bima", "Nara", "Raka"].forEach((name, i) => {
       const bot = createPlayer(`AI_${code}_${i}`, name, true);
       room.players.push(bot);
@@ -671,11 +740,17 @@ function createRoom(socket, aiMode = false) {
 
   socket.emit("room:joined", {
     code,
-    isDealer: true,
-    aiMode
+    isDealer: !aiMode,
+    aiMode,
+    dealerName: aiMode ? "AI DEALER" : "Dealer"
   });
 
   broadcast(room);
+}
+
+function canManageRound(room, socketId) {
+  if (room.aiMode) return room.hostId === socketId;
+  return room.dealerId === socketId;
 }
 
 io.on("connection", socket => {
@@ -686,7 +761,7 @@ io.on("connection", socket => {
   });
 
   socket.on("room:create-ai", data => {
-    createRoom(socket, true);
+    createRoom(socket, true, data || {});
   });
 
   socket.on("room:join", data => {
@@ -713,7 +788,11 @@ io.on("connection", socket => {
       return;
     }
 
-    const player = createPlayer(socket.id, cleanName(data?.name));
+    const player = createPlayer(
+      socket.id,
+      cleanName(data?.name)
+    );
+
     player.avatar = cleanAvatar(data?.avatar);
     room.players.push(player);
     socket.join(code);
@@ -743,6 +822,7 @@ io.on("connection", socket => {
   socket.on("player:rename", data => {
     const room = getRoomBySocket(socket.id);
     const player = room && getPlayer(room, socket.id);
+
     if (!player) return;
 
     player.name = cleanName(data?.name);
@@ -751,7 +831,8 @@ io.on("connection", socket => {
 
   socket.on("dealer:start", () => {
     const room = getRoomBySocket(socket.id);
-    if (!room || room.dealerId !== socket.id) return;
+
+    if (!room || !canManageRound(room, socket.id)) return;
     if (room.phase !== "waiting" && room.phase !== "showdown") return;
 
     startRound(room);
@@ -762,7 +843,7 @@ io.on("connection", socket => {
     if (!room) return;
 
     const player = getPlayer(room, socket.id);
-    if (!player) return;
+    if (!player || player.isAI) return;
 
     applyAction(
       room,
@@ -774,11 +855,14 @@ io.on("connection", socket => {
 
   socket.on("dealer:next", () => {
     const room = getRoomBySocket(socket.id);
-    if (!room || room.dealerId !== socket.id) return;
+
+    if (!room || !canManageRound(room, socket.id)) return;
+    if (room.phase !== "showdown") return;
 
     room.phase = "waiting";
     room.started = false;
     room.turnId = null;
+
     room.players.forEach(p => {
       p.hand = [];
       p.bet = 0;
@@ -791,6 +875,7 @@ io.on("connection", socket => {
     room.community = [];
     room.currentBet = 0;
     room.results = [];
+
     broadcast(room);
   });
 
@@ -801,21 +886,42 @@ io.on("connection", socket => {
     const player = getPlayer(room, socket.id);
     if (!player || player.chips > 0) return;
 
-    io.to(room.dealerId).emit("topup:request", {
-      id: player.id,
-      name: player.name
-    });
+    // Di VS AI, dealer AI menyetujui tambahan chip virtual.
+    if (room.aiMode && room.hostId === socket.id) {
+      if (room.phase !== "waiting" && room.phase !== "showdown") {
+        socket.emit("toast", "Tunggu ronde selesai untuk meminta chip.");
+        return;
+      }
+
+      player.chips += 10;
+      socket.emit("toast", "AI Dealer menyetujui 10 chip virtual.");
+      broadcast(room);
+      return;
+    }
+
+    if (room.dealerId) {
+      io.to(room.dealerId).emit("topup:request", {
+        id: player.id,
+        name: player.name
+      });
+    }
   });
 
   socket.on("dealer:topup-approve", data => {
     const room = getRoomBySocket(socket.id);
-    if (!room || room.dealerId !== socket.id) return;
+
+    if (!room || room.aiMode || room.dealerId !== socket.id) return;
 
     const player = getPlayer(room, String(data?.id || ""));
-    if (!player) return;
+    if (!player || player.chips > 0) return;
 
     player.chips += 10;
-    io.to(player.id).emit("toast", "10 chip virtual berhasil ditambahkan.");
+
+    io.to(player.id).emit(
+      "toast",
+      "10 chip virtual berhasil ditambahkan."
+    );
+
     broadcast(room);
   });
 
@@ -823,13 +929,22 @@ io.on("connection", socket => {
     const room = getRoomBySocket(socket.id);
     if (!room) return;
 
-    if (room.dealerId === socket.id) {
+    // Dealer manusia keluar dari room multiplayer.
+    if (!room.aiMode && room.dealerId === socket.id) {
+      rooms.delete(room.code);
+      io.to(room.code).emit("room:closed");
+      return;
+    }
+
+    // Host VS AI keluar, room AI ditutup.
+    if (room.aiMode && room.hostId === socket.id) {
       rooms.delete(room.code);
       io.to(room.code).emit("room:closed");
       return;
     }
 
     const index = room.players.findIndex(p => p.id === socket.id);
+
     if (index >= 0) {
       room.players.splice(index, 1);
 
@@ -837,6 +952,7 @@ io.on("connection", socket => {
         room.players.forEach(p => {
           p.folded = true;
         });
+
         room.phase = "showdown";
         room.turnId = null;
       }
@@ -853,3 +969,4 @@ io.on("connection", socket => {
 server.listen(PORT, () => {
   console.log(`Joo Cards berjalan di port ${PORT}`);
 });
+
