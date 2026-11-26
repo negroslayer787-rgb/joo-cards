@@ -2,100 +2,82 @@
 (() => {
   const $ = id => document.getElementById(id);
 
+  let currentCode = "";
+  let isDealer = false;
+
   function toast(message) {
     const el = $("toast");
-    if (!el) return;
     el.textContent = message;
     el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 2500);
   }
 
-  function status(message) {
+  function connection(message) {
     const el = $("connection");
     if (el) el.textContent = message;
   }
 
-  // Memastikan JavaScript berjalan
-  status("JAVASCRIPT AKTIF");
+  function name() {
+    return $("name").value.trim() || "Pemain";
+  }
 
-  // Memeriksa Socket.IO
   if (typeof window.io !== "function") {
-    status("SOCKET.IO CLIENT TIDAK TERMUAT");
-    toast("File Socket.IO tidak berhasil dimuat.");
+    connection("SOCKET.IO TIDAK TERMUAT");
+    toast("Periksa koneksi Socket.IO.");
     return;
   }
 
   const socket = window.io({
+    transports: ["polling"],
     reconnection: true,
     timeout: 10000
   });
 
-  let isDealer = false;
-  let currentCode = "";
-
-  function playerName() {
-    return $("name").value.trim() || "Pemain";
-  }
+  connection("MENGHUBUNGKAN...");
 
   socket.on("connect", () => {
-    status("TERHUBUNG");
-    toast("Koneksi server berhasil.");
+    connection("TERHUBUNG");
   });
 
   socket.on("disconnect", () => {
-    status("TERPUTUS");
-    toast("Koneksi server terputus.");
+    connection("TERPUTUS");
   });
 
   socket.on("connect_error", error => {
-    status("GAGAL TERHUBUNG");
+    connection("KONEKSI GAGAL");
     toast("Koneksi gagal: " + error.message);
   });
 
-  $("create").addEventListener("click", () => {
-    toast("Tombol BUAT ROOM berfungsi.");
+  $("create").onclick = () => {
+    socket.emit("room:create", { name: name() });
+  };
 
-    if (!socket.connected) {
-      toast("Server belum terhubung.");
-      return;
-    }
+  $("join").onclick = () => {
+    const code = $("code").value.trim().toUpperCase();
 
-    socket.emit("room:create", {
-      name: playerName()
-    });
-  });
-
-  $("join").addEventListener("click", () => {
-    if (!socket.connected) {
-      toast("Server belum terhubung.");
+    if (!code) {
+      toast("Masukkan kode room.");
       return;
     }
 
     socket.emit("room:join", {
-      name: playerName(),
-      code: $("code").value
+      name: name(),
+      code
     });
-  });
+  };
 
-  $("deal").addEventListener("click", () => {
-    socket.emit("dealer:deal");
-  });
+  $("deal").onclick = () => socket.emit("dealer:deal");
+  $("reveal").onclick = () => socket.emit("dealer:reveal");
+  $("next").onclick = () => socket.emit("dealer:next");
 
-  $("reveal").addEventListener("click", () => {
-    socket.emit("dealer:reveal");
-  });
-
-  $("next").addEventListener("click", () => {
-    socket.emit("dealer:next");
-  });
-
-  $("copy").addEventListener("click", async () => {
+  $("copy").onclick = async () => {
     try {
       await navigator.clipboard.writeText(currentCode);
-      toast("Kode room disalin.");
+      toast("Kode room berhasil disalin.");
     } catch {
       toast("Kode room: " + currentCode);
     }
-  });
+  };
 
   socket.on("room:joined", data => {
     currentCode = data.code;
@@ -105,10 +87,12 @@
     $("game").classList.remove("hidden");
     $("roomCode").textContent = currentCode;
 
-    toast("Room berhasil dibuat.");
+    toast("Berhasil masuk ke room.");
   });
 
-  socket.on("error:notice", toast);
+  socket.on("error:notice", message => {
+    toast(message);
+  });
 
   socket.on("room:update", room => {
     $("round").textContent = room.round;
@@ -121,22 +105,23 @@
 
       const avatar = document.createElement("div");
       avatar.className = "avatar";
-      avatar.textContent = player.name.charAt(0).toUpperCase();
+      avatar.textContent = player.name.slice(0, 1).toUpperCase();
 
-      const name = document.createElement("div");
-      name.className = "pname";
-      name.textContent = player.name;
+      const nm = document.createElement("div");
+      nm.className = "pname";
+      nm.textContent = player.name;
 
       const role = document.createElement("div");
       role.className = "role";
       role.textContent = player.isDealer ? "DEALER" : "PEMAIN";
 
-      el.append(avatar, name, role);
+      el.append(avatar, nm, role);
 
       if (player.card) {
         const card = document.createElement("div");
         card.className = "card " +
           (["♥", "♦"].includes(player.card.suit) ? "red" : "");
+
         card.textContent = player.card.rank + player.card.suit;
         el.append(card);
       } else if (player.hasCard) {
@@ -150,20 +135,17 @@
     });
 
     $("deal").classList.toggle("hidden", !isDealer);
+
     $("reveal").classList.toggle(
       "hidden",
       !isDealer || room.revealed ||
-      !room.players.some(p => p.hasCard)
+      !room.players.some(player => player.hasCard)
     );
+
     $("next").classList.toggle(
       "hidden",
       !isDealer || !room.revealed
     );
-  });
-
-  window.addEventListener("error", event => {
-    status("JAVASCRIPT ERROR");
-    toast(event.message || "Terjadi kesalahan JavaScript.");
   });
 })();
 
