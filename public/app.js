@@ -4,6 +4,7 @@
 
   let currentCode = "";
   let isDealer = false;
+  let mySocketId = null;
 
   function connection(message) {
     $("connection").textContent = message;
@@ -38,6 +39,9 @@
     const el = document.createElement("div");
     el.className = "player";
 
+    if (player.isTurn) el.classList.add("active-turn");
+    if (player.folded) el.classList.add("folded-player");
+
     const avatar = document.createElement("div");
     avatar.className = "avatar";
     avatar.textContent = player.name.slice(0, 1).toUpperCase();
@@ -60,7 +64,7 @@
         cardEl.textContent = card.rank + card.suit;
         el.appendChild(cardEl);
       });
-    } else if (player.hasHand) {
+    } else if (player.hasHand && !player.folded) {
       for (let i = 0; i < 2; i++) {
         const cardEl = document.createElement("div");
         cardEl.className = "card back";
@@ -68,6 +72,21 @@
         el.appendChild(cardEl);
       }
     }
+
+    const state = document.createElement("div");
+    state.className = "role";
+
+    if (player.folded) {
+      state.textContent = "FOLD";
+    } else if (player.isTurn) {
+      state.textContent = "GILIRANMU";
+    } else if (player.acted) {
+      state.textContent = "SELESAI";
+    } else if (player.hasHand) {
+      state.textContent = "AKTIF";
+    }
+
+    el.appendChild(state);
 
     if (player.handName) {
       const handName = document.createElement("div");
@@ -81,22 +100,22 @@
 
   function renderResults(results) {
     const section = $("results");
-    const winnerText = $("winnerText");
-    const rankingList = $("rankingList");
 
     if (!results) {
       section.classList.add("hidden");
-      winnerText.textContent = "";
-      rankingList.innerHTML = "";
+      $("winnerText").textContent = "";
+      $("rankingList").innerHTML = "";
       return;
     }
 
     section.classList.remove("hidden");
-    winnerText.textContent = results.winnerNames.length > 1
-      ? "Hasil seri: " + results.winnerNames.join(", ")
-      : "Pemenang: " + results.winnerNames[0];
 
-    rankingList.innerHTML = "";
+    $("winnerText").textContent =
+      results.winnerNames.length > 1
+        ? "Hasil seri: " + results.winnerNames.join(", ")
+        : "Pemenang: " + results.winnerNames[0];
+
+    $("rankingList").innerHTML = "";
 
     results.players.forEach((player, index) => {
       const row = document.createElement("div");
@@ -112,12 +131,13 @@
 
       if (player.winner) {
         row.classList.add("result-winner");
+
         const badge = document.createElement("b");
         badge.textContent = "PEMENANG";
         row.appendChild(badge);
       }
 
-      rankingList.appendChild(row);
+      $("rankingList").appendChild(row);
     });
   }
 
@@ -135,8 +155,14 @@
 
   connection("MENGHUBUNGKAN...");
 
-  socket.on("connect", () => connection("TERHUBUNG"));
-  socket.on("disconnect", () => connection("TERPUTUS"));
+  socket.on("connect", () => {
+    mySocketId = socket.id;
+    connection("TERHUBUNG");
+  });
+
+  socket.on("disconnect", () => {
+    connection("TERPUTUS");
+  });
 
   socket.on("connect_error", error => {
     connection("KONEKSI GAGAL");
@@ -174,10 +200,8 @@
   };
 
   $("deal").onclick = () => socket.emit("dealer:deal");
-  $("flop").onclick = () => socket.emit("dealer:flop");
-  $("turn").onclick = () => socket.emit("dealer:turn");
-  $("river").onclick = () => socket.emit("dealer:river");
-  $("showdown").onclick = () => socket.emit("dealer:showdown");
+  $("check").onclick = () => socket.emit("player:check");
+  $("fold").onclick = () => socket.emit("player:fold");
   $("next").onclick = () => socket.emit("dealer:next");
 
   $("copy").onclick = async () => {
@@ -218,33 +242,34 @@
     renderCards($("communityCards"), room.community);
     renderResults(room.results);
 
-    const stage = room.stage;
-    const canControl = isDealer;
+    const myTurn = room.currentPlayerId === mySocketId;
+    const active = room.stage !== "waiting" &&
+      room.stage !== "showdown";
+
+    $("turnInfo").textContent = active
+      ? (myTurn
+          ? "Giliranmu! Pilih CHECK atau FOLD."
+          : "Menunggu giliran pemain berikutnya.")
+      : room.stage === "showdown"
+        ? "Ronde selesai."
+        : "Menunggu dealer memulai ronde.";
+
+    $("actionControls").classList.toggle(
+      "hidden",
+      !(myTurn && active)
+    );
 
     $("deal").classList.toggle(
       "hidden",
-      !canControl || stage !== "waiting" || room.players.length < 2
-    );
-
-    $("flop").classList.toggle(
-      "hidden", !canControl || stage !== "preflop"
-    );
-
-    $("turn").classList.toggle(
-      "hidden", !canControl || stage !== "flop"
-    );
-
-    $("river").classList.toggle(
-      "hidden", !canControl || stage !== "turn"
-    );
-
-    $("showdown").classList.toggle(
-      "hidden", !canControl || stage !== "river"
+      !(isDealer && room.stage === "waiting" &&
+        room.players.length >= 2)
     );
 
     $("next").classList.toggle(
-      "hidden", !canControl || stage !== "showdown"
+      "hidden",
+      !(isDealer && room.stage === "showdown")
     );
   });
 })();
+
 
