@@ -1,5 +1,4 @@
 
-    
 (() => {
   const $ = id => document.getElementById(id);
 
@@ -30,10 +29,47 @@
       const el = document.createElement("div");
       el.className = "card " +
         (["♥", "♦"].includes(card.suit) ? "red" : "");
-
       el.textContent = card.rank + card.suit;
       container.appendChild(el);
     });
+  }
+
+  function renderPlayer(player) {
+    const el = document.createElement("div");
+    el.className = "player";
+
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = player.name.slice(0, 1).toUpperCase();
+
+    const name = document.createElement("div");
+    name.className = "pname";
+    name.textContent = player.name;
+
+    const role = document.createElement("div");
+    role.className = "role";
+    role.textContent = player.isDealer ? "DEALER" : "PEMAIN";
+
+    el.append(avatar, name, role);
+
+    if (player.publicHand && player.publicHand.length) {
+      player.publicHand.forEach(card => {
+        const cardEl = document.createElement("div");
+        cardEl.className = "card " +
+          (["♥", "♦"].includes(card.suit) ? "red" : "");
+        cardEl.textContent = card.rank + card.suit;
+        el.appendChild(cardEl);
+      });
+    } else if (player.hasHand) {
+      for (let i = 0; i < 2; i++) {
+        const cardEl = document.createElement("div");
+        cardEl.className = "card back";
+        cardEl.textContent = "J";
+        el.appendChild(cardEl);
+      }
+    }
+
+    return el;
   }
 
   if (typeof window.io !== "function") {
@@ -50,13 +86,8 @@
 
   connection("MENGHUBUNGKAN...");
 
-  socket.on("connect", () => {
-    connection("TERHUBUNG");
-  });
-
-  socket.on("disconnect", () => {
-    connection("TERPUTUS");
-  });
+  socket.on("connect", () => connection("TERHUBUNG"));
+  socket.on("disconnect", () => connection("TERPUTUS"));
 
   socket.on("connect_error", error => {
     connection("KONEKSI GAGAL");
@@ -94,6 +125,10 @@
   };
 
   $("deal").onclick = () => socket.emit("dealer:deal");
+  $("flop").onclick = () => socket.emit("dealer:flop");
+  $("turn").onclick = () => socket.emit("dealer:turn");
+  $("river").onclick = () => socket.emit("dealer:river");
+  $("showdown").onclick = () => socket.emit("dealer:showdown");
   $("next").onclick = () => socket.emit("dealer:next");
 
   $("copy").onclick = async () => {
@@ -118,56 +153,53 @@
 
   socket.on("error:notice", message => toast(message));
 
+  socket.on("hand:update", cards => {
+    renderCards($("myHand"), cards);
+  });
+
   socket.on("room:update", room => {
     $("round").textContent = room.round;
     $("status").textContent = room.message;
 
     $("players").innerHTML = "";
-
     room.players.forEach(player => {
-      const el = document.createElement("div");
-      el.className = "player";
-
-      const avatar = document.createElement("div");
-      avatar.className = "avatar";
-      avatar.textContent = player.name.slice(0, 1).toUpperCase();
-
-      const name = document.createElement("div");
-      name.className = "pname";
-      name.textContent = player.name;
-
-      const role = document.createElement("div");
-      role.className = "role";
-      role.textContent = player.isDealer ? "DEALER" : "PEMAIN";
-
-      el.append(avatar, name, role);
-
-      if (player.hasHand) {
-        const card = document.createElement("div");
-        card.className = "card back";
-        card.textContent = "J";
-        el.appendChild(card);
-      }
-
-      $("players").appendChild(el);
+      $("players").appendChild(renderPlayer(player));
     });
+
+    renderCards($("communityCards"), room.community);
+
+    const stage = room.stage;
+    const canControl = isDealer;
 
     $("deal").classList.toggle(
       "hidden",
-      !isDealer || room.dealt || room.players.length < 2
+      !canControl || stage !== "waiting" || room.players.length < 2
+    );
+
+    $("flop").classList.toggle(
+      "hidden",
+      !canControl || stage !== "preflop"
+    );
+
+    $("turn").classList.toggle(
+      "hidden",
+      !canControl || stage !== "flop"
+    );
+
+    $("river").classList.toggle(
+      "hidden",
+      !canControl || stage !== "turn"
+    );
+
+    $("showdown").classList.toggle(
+      "hidden",
+      !canControl || stage !== "river"
     );
 
     $("next").classList.toggle(
       "hidden",
-      !isDealer || !room.dealt
+      !canControl || stage !== "showdown"
     );
   });
-
-  socket.on("hand:update", cards => {
-    renderCards($("myHand"), cards);
-  });
-
-  socket.on("community:update", cards => {
-    renderCards($("communityCards"), cards);
-  });
 })();
+
