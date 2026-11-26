@@ -707,4 +707,68 @@ input::placeholder { color: #69786e; }
   .pot-display strong { font-size: 22px; }
   .controls button { flex: 1 1 40%; }
 }
+/* =========================================
+   JOO CARDS — STABILISASI ANIMASI
+========================================= */
+
+/* Pemain tidak muncul ulang setiap giliran */
+.player {
+  animation: none !important;
+}
+
+/* Giliran aktif tetap terlihat tanpa gerakan */
+.player.active-turn {
+  transform: none !important;
+  transition:
+    border-color .2s ease,
+    background .2s ease,
+    box-shadow .2s ease;
+}
+
+/* Kartu meja tidak mengulang animasi */
+.card.community-deal,
+.card.private-deal {
+  animation: none !important;
+}
+
+/* Kartu tertutup tidak bergerak setiap update */
+.card-back {
+  animation: none !important;
+}
+
+/* Area kartu lebih stabil */
+#communityCards,
+#myHand {
+  transition: none !important;
+}
+
+/* Pot tidak bergetar saat nilainya berubah */
+.pot-display {
+  transition: none !important;
+}
+
+/* Informasi top up */
+.player-topup-count {
+  color: #91a096;
+  font-size: 9px;
+  margin: 4px 0;
+}
+
+/* Popup pemenang tetap memiliki animasi ringan */
+.popup-card {
+  animation: popupEnter .35s ease;
+}
+
+/* Kurangi animasi untuk perangkat yang meminta gerakan minimal */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
 
