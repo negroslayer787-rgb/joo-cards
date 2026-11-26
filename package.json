@@ -1,0 +1,8 @@
+{
+  "name": "joo-cards",
+  "version": "1.0.0",
+  "description": "Multiplayer non-wagering card room",
+  "main": "server.js",
+  "scripts": {"start": "node server.js"},
+  "dependencies": {"express": "^4.21.2", "socket.io": "^4.8.1"}
+}

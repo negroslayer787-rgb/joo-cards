@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Joo Cards</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+<header><div class="brand"><span class="mark">J</span><div><h1>JOO CARDS</h1><small>MULTIPLAYER CARD ROOM</small></div></div><span class="live"><i></i> ONLINE ROOM</span></header>
+<main>
+<section id="lobby" class="panel lobby">
+<div class="intro"><p class="eyebrow">PLAY TOGETHER</p><h2>Satu meja.<br><em>Banyak cerita.</em></h2><p>Buat room pribadi dan bagikan kode kepada temanmu.</p></div>
+<div class="entry">
+<label>Nama pemain</label><input id="name" maxlength="18" placeholder="Masukkan nama">
+<button id="create" class="primary">BUAT ROOM</button>
+<div class="or">ATAU GABUNG ROOM</div>
+<input id="code" maxlength="6" placeholder="KODE ROOM">
+<button id="join" class="secondary">GABUNG</button>
+</div></section>
+<section id="game" class="hidden">
+<div class="roombar panel"><div><small>ROOM CODE</small><strong id="roomCode">------</strong></div><button id="copy" class="secondary small">SALIN KODE</button><div class="round">RONDE <b id="round">1</b></div></div>
+<div class="table panel">
+<div class="tabletop"><div class="tablelabel">JOO <span>CARDS</span></div><div id="status" class="status">Menunggu pemain...</div></div>
+<div id="players" class="players"></div>
+<div class="controls"><button id="deal" class="primary hidden">BAGIKAN KARTU</button><button id="reveal" class="secondary hidden">BUKA KARTU</button><button id="next" class="secondary hidden">RONDE BERIKUTNYA</button></div>
+</div>
+<p class="footnote">Permainan kartu santai • Tanpa taruhan atau uang nyata</p>
+</section>
+</main>
+<div id="toast" role="status"></div>
+</div>
+<script src="/socket.io/socket.io.js"></script><script src="app.js"></script>
+</body></html>
