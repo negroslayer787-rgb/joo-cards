@@ -142,61 +142,37 @@ function evaluateFive(cards) {
   }
 
   if (flush && straight === 14) {
-    return {
-      score: [9, 14],
-      name: HAND_NAMES[9]
-    };
+    return { score: [9, 14], name: HAND_NAMES[9] };
   }
 
   if (flush && straight) {
-    return {
-      score: [8, straight],
-      name: HAND_NAMES[8]
-    };
+    return { score: [8, straight], name: HAND_NAMES[8] };
   }
 
   if (groups[0].count === 4) {
     return {
-      score: [
-        7,
-        groups[0].value,
-        groups[1].value
-      ],
+      score: [7, groups[0].value, groups[1].value],
       name: HAND_NAMES[7]
     };
   }
 
-  if (
-    groups[0].count === 3 &&
-    groups[1].count === 2
-  ) {
+  if (groups[0].count === 3 && groups[1].count === 2) {
     return {
-      score: [
-        6,
-        groups[0].value,
-        groups[1].value
-      ],
+      score: [6, groups[0].value, groups[1].value],
       name: HAND_NAMES[6]
     };
   }
 
   if (flush) {
-    return {
-      score: [5, ...values],
-      name: HAND_NAMES[5]
-    };
+    return { score: [5, ...values], name: HAND_NAMES[5] };
   }
 
   if (straight) {
-    return {
-      score: [4, straight],
-      name: HAND_NAMES[4]
-    };
+    return { score: [4, straight], name: HAND_NAMES[4] };
   }
 
   if (groups[0].count === 3) {
-    const kickers = groups
-      .slice(1)
+    const kickers = groups.slice(1)
       .map(g => g.value)
       .sort((a, b) => b - a);
 
@@ -206,18 +182,13 @@ function evaluateFive(cards) {
     };
   }
 
-  if (
-    groups[0].count === 2 &&
-    groups[1].count === 2
-  ) {
+  if (groups[0].count === 2 && groups[1].count === 2) {
     const pairs = groups
       .filter(g => g.count === 2)
       .map(g => g.value)
       .sort((a, b) => b - a);
 
-    const kicker = groups.find(
-      g => g.count === 1
-    ).value;
+    const kicker = groups.find(g => g.count === 1).value;
 
     return {
       score: [2, ...pairs, kicker],
@@ -232,19 +203,12 @@ function evaluateFive(cards) {
       .sort((a, b) => b - a);
 
     return {
-      score: [
-        1,
-        groups[0].value,
-        ...kickers
-      ],
+      score: [1, groups[0].value, ...kickers],
       name: HAND_NAMES[1]
     };
   }
 
-  return {
-    score: [0, ...values],
-    name: HAND_NAMES[0]
-  };
+  return { score: [0, ...values], name: HAND_NAMES[0] };
 }
 
 function compareScores(a, b) {
@@ -252,9 +216,7 @@ function compareScores(a, b) {
     const x = a[i] || 0;
     const y = b[i] || 0;
 
-    if (x !== y) {
-      return x > y ? 1 : -1;
-    }
+    if (x !== y) return x > y ? 1 : -1;
   }
 
   return 0;
@@ -266,10 +228,7 @@ function evaluateSeven(cards) {
   for (const hand of combinations(cards, 5)) {
     const result = evaluateFive(hand);
 
-    if (
-      !best ||
-      compareScores(result.score, best.score) > 0
-    ) {
+    if (!best || compareScores(result.score, best.score) > 0) {
       best = result;
     }
   }
@@ -292,9 +251,7 @@ function activePlayers(room) {
 }
 
 function actionablePlayers(room) {
-  return activePlayers(room).filter(
-    p => p.chips > 0
-  );
+  return activePlayers(room).filter(p => p.chips > 0);
 }
 
 function pay(player, amount) {
@@ -311,37 +268,17 @@ function pay(player, amount) {
 }
 
 function nextPlayer(room, fromIndex, allowedIds) {
-  for (
-    let step = 1;
-    step <= room.players.length;
-    step++
-  ) {
-    const index =
-      (fromIndex + step) % room.players.length;
-
+  for (let step = 1; step <= room.players.length; step++) {
+    const index = (fromIndex + step) % room.players.length;
     const player = room.players[index];
 
-    if (
-      player &&
-      allowedIds.has(player.id)
-    ) {
+    if (player && allowedIds.has(player.id)) {
       return player;
     }
   }
 
   return null;
 }
-
-/*
-  Urutan khusus:
-  1. Big Blind
-  2. Pemain berikutnya sesuai urutan kursi
-  3. Small Blind menjadi yang terakhir
-
-  Karena posisi Small Blind selalu tepat sebelum
-  Big Blind dalam urutan melingkar, urutan ini
-  tetap terjaga.
-*/
 
 function firstActor(room, allowedIds) {
   const bbIndex = room.players.findIndex(
@@ -354,9 +291,7 @@ function firstActor(room, allowedIds) {
 
   const bb = room.players[bbIndex];
 
-  if (bb && allowedIds.has(bb.id)) {
-    return bb;
-  }
+  if (bb && allowedIds.has(bb.id)) return bb;
 
   return nextPlayer(room, bbIndex, allowedIds);
 }
@@ -374,11 +309,7 @@ function advanceTurn(room, fromId) {
     p => p.id === fromId
   );
 
-  const next = nextPlayer(
-    room,
-    fromIndex,
-    room.pending
-  );
+  const next = nextPlayer(room, fromIndex, room.pending);
 
   room.currentPlayerId = next ? next.id : null;
 }
@@ -388,6 +319,180 @@ function potTotal(room) {
     (sum, p) => sum + p.totalBet,
     0
   );
+}
+
+/* =========================
+   SIDE POT SYSTEM
+========================= */
+
+/*
+  Membentuk pot berdasarkan tingkat kontribusi.
+
+  Semua pemain yang memasukkan chip ikut menyumbang.
+  Hanya pemain yang tidak Fold dan memenuhi batas
+  kontribusi pot yang boleh memenangkan pot tersebut.
+*/
+
+function buildSidePots(room) {
+  const levels = [
+    ...new Set(
+      room.players
+        .map(p => p.totalBet)
+        .filter(amount => amount > 0)
+    )
+  ].sort((a, b) => a - b);
+
+  const pots = [];
+  let previousLevel = 0;
+
+  for (const level of levels) {
+    const contributors = room.players.filter(
+      p => p.totalBet >= level
+    );
+
+    const amount =
+      (level - previousLevel) * contributors.length;
+
+    previousLevel = level;
+
+    if (amount <= 0) continue;
+
+    const eligible = contributors.filter(
+      p => !p.folded && p.hand.length === 2
+    );
+
+    pots.push({
+      type: pots.length === 0 ? "MAIN POT" : "SIDE POT " + pots.length,
+      amount,
+      cap: level,
+      contributorIds: contributors.map(p => p.id),
+      eligibleIds: eligible.map(p => p.id),
+      winners: [],
+      winnerNames: []
+    });
+  }
+
+  return pots;
+}
+
+function awardSidePots(room) {
+  const eligible = activePlayers(room);
+
+  const evaluated = eligible.map(player => {
+    const result = evaluateSeven([
+      ...player.hand,
+      ...room.community
+    ]);
+
+    return {
+      id: player.id,
+      name: player.name,
+      handName: result.name,
+      score: result.score
+    };
+  });
+
+  const pots = buildSidePots(room);
+  const payouts = [];
+
+  for (const pot of pots) {
+    const contenders = evaluated.filter(
+      player => pot.eligibleIds.includes(player.id)
+    );
+
+    if (!contenders.length) {
+      /*
+        Kondisi khusus: jika tidak ada pemain aktif
+        yang memenuhi batas pot, jangan membagikan
+        pot kepada pemain yang tidak berhak.
+      */
+      pot.winnerNames = [];
+      continue;
+    }
+
+    contenders.sort((a, b) =>
+      compareScores(b.score, a.score)
+    );
+
+    const bestScore = contenders[0].score;
+
+    const winners = contenders.filter(player =>
+      compareScores(player.score, bestScore) === 0
+    );
+
+    const share = Math.floor(
+      pot.amount / winners.length
+    );
+
+    let remainder = pot.amount % winners.length;
+
+    winners.forEach(winner => {
+      const amount =
+        share + (remainder > 0 ? 1 : 0);
+
+      if (remainder > 0) remainder--;
+
+      const player = findPlayer(room, winner.id);
+
+      if (player) {
+        player.chips += amount;
+      }
+
+      const existing = payouts.find(
+        item => item.id === winner.id
+      );
+
+      if (existing) {
+        existing.amount += amount;
+      } else {
+        payouts.push({
+          id: winner.id,
+          name: winner.name,
+          amount
+        });
+      }
+
+      pot.winners.push({
+        id: winner.id,
+        name: winner.name,
+        amount
+      });
+    });
+
+    pot.winnerNames = winners.map(w => w.name);
+  }
+
+  const bestOverall = [...evaluated].sort(
+    (a, b) => compareScores(b.score, a.score)
+  )[0];
+
+  const overallWinners = bestOverall
+    ? evaluated.filter(player =>
+        compareScores(player.score, bestOverall.score) === 0
+      )
+    : [];
+
+  return {
+    winnerNames: overallWinners.map(p => p.name),
+
+    players: evaluated.map(player => ({
+      id: player.id,
+      name: player.name,
+      handName: player.handName,
+      winner: overallWinners.some(
+        winner => winner.id === player.id
+      )
+    })),
+
+    payouts,
+    pots: pots.map(pot => ({
+      type: pot.type,
+      amount: pot.amount,
+      cap: pot.cap,
+      winnerNames: pot.winnerNames,
+      winners: pot.winners
+    }))
+  };
 }
 
 /* =========================
@@ -406,146 +511,39 @@ function finishByFold(room) {
 
   room.results = {
     winnerNames: [winner.name],
+
     players: [{
       id: winner.id,
       name: winner.name,
       handName: "Menang karena pemain lain Fold",
       winner: true
     }],
+
     payouts: [{
+      id: winner.id,
       name: winner.name,
       amount
+    }],
+
+    pots: [{
+      type: "MAIN POT",
+      amount,
+      cap: null,
+      winnerNames: [winner.name],
+      winners: [{
+        id: winner.id,
+        name: winner.name,
+        amount
+      }]
     }]
   };
 
   room.stage = "showdown";
   room.currentPlayerId = null;
   room.pending.clear();
-
   room.message = winner.name + " memenangkan pot!";
 
   return true;
-}
-
-function awardSidePots(room) {
-  const eligible = activePlayers(room);
-
-  const levels = [
-    ...new Set(
-      room.players
-        .map(p => p.totalBet)
-        .filter(v => v > 0)
-    )
-  ].sort((a, b) => a - b);
-
-  const payouts = [];
-  let previous = 0;
-
-  for (const level of levels) {
-    const contributors = room.players.filter(
-      p => p.totalBet >= level
-    );
-
-    const pot =
-      (level - previous) * contributors.length;
-
-    previous = level;
-
-    const contenders = eligible.filter(
-      p => p.totalBet >= level
-    );
-
-    if (!contenders.length || pot <= 0) continue;
-
-    const ranked = contenders.map(player => ({
-      player,
-      result: evaluateSeven([
-        ...player.hand,
-        ...room.community
-      ])
-    }));
-
-    ranked.sort((a, b) =>
-      compareScores(
-        b.result.score,
-        a.result.score
-      )
-    );
-
-    const best = ranked[0].result.score;
-
-    const winners = ranked.filter(item =>
-      compareScores(item.result.score, best) === 0
-    );
-
-    const share = Math.floor(
-      pot / winners.length
-    );
-
-    let remainder = pot % winners.length;
-
-    winners.forEach(item => {
-      const amount =
-        share + (remainder-- > 0 ? 1 : 0);
-
-      item.player.chips += amount;
-
-      const existing = payouts.find(
-        x => x.id === item.player.id
-      );
-
-      if (existing) {
-        existing.amount += amount;
-      } else {
-        payouts.push({
-          id: item.player.id,
-          name: item.player.name,
-          amount
-        });
-      }
-    });
-  }
-
-  const evaluated = eligible.map(player => {
-    const result = evaluateSeven([
-      ...player.hand,
-      ...room.community
-    ]);
-
-    return {
-      id: player.id,
-      name: player.name,
-      handName: result.name,
-      score: result.score
-    };
-  });
-
-  const bestOverall = [...evaluated].sort(
-    (a, b) =>
-      compareScores(b.score, a.score)
-  )[0];
-
-  const winners = evaluated.filter(p =>
-    compareScores(
-      p.score,
-      bestOverall.score
-    ) === 0
-  );
-
-  return {
-    winnerNames: winners.map(p => p.name),
-
-    players: evaluated.map(p => ({
-      id: p.id,
-      name: p.name,
-      handName: p.handName,
-      winner: winners.some(
-        w => w.id === p.id
-      )
-    })),
-
-    payouts
-  };
 }
 
 function finishShowdown(room) {
@@ -554,7 +552,6 @@ function finishShowdown(room) {
   room.stage = "showdown";
   room.currentPlayerId = null;
   room.pending.clear();
-
   room.message = "Showdown selesai!";
 }
 
@@ -587,17 +584,10 @@ function beginStreet(room, stage) {
     return;
   }
 
-  const first = firstActor(
-    room,
-    room.pending
-  );
+  const first = firstActor(room, room.pending);
 
-  room.currentPlayerId = first
-    ? first.id
-    : null;
-
-  room.message =
-    stage.toUpperCase() + " dimulai.";
+  room.currentPlayerId = first ? first.id : null;
+  room.message = stage.toUpperCase() + " dimulai.";
 }
 
 function advanceStreet(room) {
@@ -635,12 +625,7 @@ function advanceStreet(room) {
    PLAYER ACTIONS
 ========================= */
 
-function completeAction(
-  room,
-  player,
-  action,
-  raiseTo
-) {
+function completeAction(room, player, action, raiseTo) {
   if (
     room.stage === "waiting" ||
     room.stage === "showdown"
@@ -663,7 +648,6 @@ function completeAction(
   if (action === "fold") {
     player.folded = true;
     room.pending.delete(player.id);
-
     room.message = player.name + " Fold.";
   }
 
@@ -673,13 +657,11 @@ function completeAction(
     }
 
     room.pending.delete(player.id);
-
     room.message = player.name + " Check.";
   }
 
   else if (action === "call") {
-    const due =
-      room.currentBet - player.streetBet;
+    const due = room.currentBet - player.streetBet;
 
     if (due <= 0) {
       return "Tidak ada taruhan yang perlu di-Call.";
@@ -696,34 +678,25 @@ function completeAction(
   else if (action === "raise") {
     const target = Math.floor(Number(raiseTo));
 
-    if (
-      !Number.isFinite(target) ||
-      target <= room.currentBet
-    ) {
+    if (!Number.isFinite(target) || target <= room.currentBet) {
       return "Raise harus lebih besar dari taruhan saat ini.";
     }
 
-    const maximum =
-      player.streetBet + player.chips;
+    const maximum = player.streetBet + player.chips;
 
     if (target > maximum) {
       return "Chip tidak mencukupi.";
     }
 
-    const paid =
-      target - player.streetBet;
+    const paid = target - player.streetBet;
 
     pay(player, paid);
 
     room.currentBet = target;
-
     setPending(room, player.id);
 
     room.message =
-      player.name +
-      " Raise menjadi " +
-      target +
-      " chip.";
+      player.name + " Raise menjadi " + target + " chip.";
   }
 
   else if (action === "allin") {
@@ -731,8 +704,7 @@ function completeAction(
       return "Chip kamu sudah habis.";
     }
 
-    const target =
-      player.streetBet + player.chips;
+    const target = player.streetBet + player.chips;
 
     pay(player, player.chips);
 
@@ -823,9 +795,7 @@ function sendUpdate(room) {
       isBigBlind: p.id === room.bigBlindId,
       hasHand: p.hand.length === 2,
       publicHand:
-        room.stage === "showdown"
-          ? p.hand
-          : null
+        room.stage === "showdown" ? p.hand : null
     }))
   });
 
@@ -875,8 +845,7 @@ function removePlayer(socket) {
 
   if (room.stage !== "waiting") {
     resetRound(room);
-    room.message =
-      "Pemain keluar. Ronde diatur ulang.";
+    room.message = "Pemain keluar. Ronde diatur ulang.";
   }
 
   sendUpdate(room);
@@ -885,10 +854,7 @@ function removePlayer(socket) {
 function getDealerRoom(socket) {
   const room = rooms.get(socket.data.roomCode);
 
-  if (
-    !room ||
-    room.dealerId !== socket.id
-  ) {
+  if (!room || room.dealerId !== socket.id) {
     socket.emit(
       "error:notice",
       "Hanya dealer yang dapat melakukan tindakan ini."
@@ -905,8 +871,6 @@ function getDealerRoom(socket) {
 ========================= */
 
 io.on("connection", socket => {
-
-  /* CREATE ROOM */
 
   socket.on("room:create", (data = {}, callback) => {
     removePlayer(socket);
@@ -928,8 +892,7 @@ io.on("connection", socket => {
       smallBlindId: null,
       bigBlindId: null,
       blindCursor: 0,
-      message:
-        "Dealer telah membuat room. Menunggu pemain."
+      message: "Dealer telah membuat room. Menunggu pemain."
     };
 
     rooms.set(code, room);
@@ -949,8 +912,6 @@ io.on("connection", socket => {
     sendUpdate(room);
   });
 
-  /* JOIN ROOM */
-
   socket.on("room:join", (data = {}, callback) => {
     const code = String(data.code || "")
       .trim()
@@ -966,17 +927,9 @@ io.on("connection", socket => {
       }
     };
 
-    if (!room) {
-      return fail("Room tidak ditemukan.");
-    }
-
-    if (room.players.length >= 6) {
-      return fail("Room sudah penuh.");
-    }
-
-    if (room.stage !== "waiting") {
-      return fail("Ronde sedang berlangsung.");
-    }
+    if (!room) return fail("Room tidak ditemukan.");
+    if (room.players.length >= 6) return fail("Room sudah penuh.");
+    if (room.stage !== "waiting") return fail("Ronde sedang berlangsung.");
 
     removePlayer(socket);
 
@@ -997,8 +950,7 @@ io.on("connection", socket => {
     socket.join(code);
     socket.data.roomCode = code;
 
-    room.message =
-      player.name + " bergabung.";
+    room.message = player.name + " bergabung.";
 
     socket.emit("room:joined", {
       code,
@@ -1012,8 +964,6 @@ io.on("connection", socket => {
     sendUpdate(room);
   });
 
-  /* PROFILE UPDATE */
-
   socket.on("player:profile", data => {
     const room = rooms.get(socket.data.roomCode);
     const player = room && findPlayer(room, socket.id);
@@ -1025,23 +975,14 @@ io.on("connection", socket => {
         player.name = cleanName(data.name);
       }
 
-      if (
-        Object.prototype.hasOwnProperty.call(
-          data,
-          "avatar"
-        )
-      ) {
+      if (Object.prototype.hasOwnProperty.call(data, "avatar")) {
         player.avatar = cleanAvatar(data.avatar);
       }
     }
 
-    room.message =
-      player.name + " memperbarui profil.";
-
+    room.message = player.name + " memperbarui profil.";
     sendUpdate(room);
   });
-
-  /* LEGACY RENAME */
 
   socket.on("player:rename", name => {
     const room = rooms.get(socket.data.roomCode);
@@ -1050,55 +991,35 @@ io.on("connection", socket => {
     if (!player) return;
 
     player.name = cleanName(name);
-
-    room.message =
-      player.name + " memperbarui nama.";
+    room.message = player.name + " memperbarui nama.";
 
     sendUpdate(room);
   });
 
-  /* START ROUND */
-
   socket.on("dealer:start", amount => {
     const room = getDealerRoom(socket);
 
-    if (!room || room.stage !== "waiting") {
-      return;
-    }
+    if (!room || room.stage !== "waiting") return;
 
     if (room.players.length < 2) {
-      socket.emit(
-        "error:notice",
-        "Minimal 2 pemain diperlukan."
-      );
-
+      socket.emit("error:notice", "Minimal 2 pemain diperlukan.");
       return;
     }
 
     const bbAmount = Math.floor(Number(amount));
 
-    if (
-      !Number.isFinite(bbAmount) ||
-      bbAmount < 1
-    ) {
-      socket.emit(
-        "error:notice",
-        "Big Blind minimal 1 chip."
-      );
-
+    if (!Number.isFinite(bbAmount) || bbAmount < 1) {
+      socket.emit("error:notice", "Big Blind minimal 1 chip.");
       return;
     }
 
-    room.players = room.players.filter(
-      p => p.chips > 0
-    );
+    room.players = room.players.filter(p => p.chips > 0);
 
     if (room.players.length < 2) {
       socket.emit(
         "error:notice",
         "Minimal 2 pemain dengan chip diperlukan."
       );
-
       return;
     }
 
@@ -1109,11 +1030,7 @@ io.on("connection", socket => {
     room.pending.clear();
 
     room.players.forEach(p => {
-      p.hand = [
-        room.deck.pop(),
-        room.deck.pop()
-      ];
-
+      p.hand = [room.deck.pop(), room.deck.pop()];
       p.folded = false;
       p.streetBet = 0;
       p.totalBet = 0;
@@ -1121,12 +1038,8 @@ io.on("connection", socket => {
     });
 
     const count = room.players.length;
-
-    const sbIndex =
-      room.blindCursor % count;
-
-    const bbIndex =
-      (sbIndex + 1) % count;
+    const sbIndex = room.blindCursor % count;
+    const bbIndex = (sbIndex + 1) % count;
 
     const sb = room.players[sbIndex];
     const bb = room.players[bbIndex];
@@ -1134,51 +1047,26 @@ io.on("connection", socket => {
     room.smallBlindId = sb.id;
     room.bigBlindId = bb.id;
 
-    /* BIG BLIND */
-
-    const actualBB = Math.min(
-      bbAmount,
-      bb.chips
-    );
+    const actualBB = Math.min(bbAmount, bb.chips);
 
     pay(bb, actualBB);
-
     room.currentBet = actualBB;
 
-    /* SMALL BLIND AUTO CALL */
-
-    const sbDue = Math.max(
-      0,
-      actualBB - sb.streetBet
-    );
-
+    const sbDue = Math.max(0, actualBB - sb.streetBet);
     pay(sb, sbDue);
 
     room.stage = "preflop";
 
     room.message =
-      "Big Blind " +
-      bb.name +
-      " memasang " +
-      actualBB +
+      "Big Blind " + bb.name +
+      " memasang " + actualBB +
       " chip. Small Blind otomatis Call.";
 
-    room.blindCursor =
-      (sbIndex + 1) % count;
-
-    /*
-      Big Blind mendapat giliran pertama.
-      Small Blind berada di urutan terakhir.
-      Pemain yang sudah All-in tidak dimasukkan
-      ke daftar pemain yang dapat bertindak.
-    */
+    room.blindCursor = (sbIndex + 1) % count;
 
     setPending(room);
 
-    const first = firstActor(
-      room,
-      room.pending
-    );
+    const first = firstActor(room, room.pending);
 
     if (!first) {
       advanceStreet(room);
@@ -1188,8 +1076,6 @@ io.on("connection", socket => {
 
     sendUpdate(room);
   });
-
-  /* PLAYER ACTION */
 
   socket.on("player:action", data => {
     const room = rooms.get(socket.data.roomCode);
@@ -1212,28 +1098,19 @@ io.on("connection", socket => {
     sendUpdate(room);
   });
 
-  /* NEXT ROUND */
-
   socket.on("dealer:next", () => {
     const room = getDealerRoom(socket);
 
-    if (!room || room.stage !== "showdown") {
-      return;
-    }
+    if (!room || room.stage !== "showdown") return;
 
     room.round++;
-
     resetRound(room);
 
     room.message =
-      "Ronde " +
-      room.round +
-      ". Menunggu dealer.";
+      "Ronde " + room.round + ". Menunggu dealer.";
 
     sendUpdate(room);
   });
-
-  /* TOP UP REQUEST */
 
   socket.on("player:topup-request", () => {
     const room = rooms.get(socket.data.roomCode);
@@ -1242,30 +1119,20 @@ io.on("connection", socket => {
     if (!room || !player) return;
 
     if (player.chips > 0) {
-      socket.emit(
-        "error:notice",
-        "Chip kamu belum habis."
-      );
-
+      socket.emit("error:notice", "Chip kamu belum habis.");
       return;
     }
 
     player.topupRequested = true;
 
-    io.to(room.dealerId).emit(
-      "topup:request",
-      {
-        playerId: player.id,
-        name: player.name
-      }
-    );
+    io.to(room.dealerId).emit("topup:request", {
+      playerId: player.id,
+      name: player.name
+    });
 
     socket.emit("topup:waiting");
-
     sendUpdate(room);
   });
-
-  /* TOP UP APPROVAL */
 
   socket.on("dealer:topup-approve", playerId => {
     const room = getDealerRoom(socket);
@@ -1274,30 +1141,20 @@ io.on("connection", socket => {
 
     const player = findPlayer(room, playerId);
 
-    if (
-      !player ||
-      !player.topupRequested ||
-      player.chips > 0
-    ) {
+    if (!player || !player.topupRequested || player.chips > 0) {
       return;
     }
 
     player.chips = 10;
     player.topupRequested = false;
 
-    io.to(player.id).emit(
-      "topup:approved",
-      10
-    );
+    io.to(player.id).emit("topup:approved", 10);
 
     room.message =
-      player.name +
-      " menerima 10 chip virtual gratis.";
+      player.name + " menerima 10 chip virtual gratis.";
 
     sendUpdate(room);
   });
-
-  /* DISCONNECT */
 
   socket.on("disconnect", () => {
     removePlayer(socket);
@@ -1309,10 +1166,6 @@ io.on("connection", socket => {
 ========================= */
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    "Joo Cards berjalan di port " + PORT
-  );
+  console.log("Joo Cards berjalan di port " + PORT);
 });
-
-
 
