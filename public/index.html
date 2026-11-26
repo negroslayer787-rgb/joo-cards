@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Joo Cards</title>
-  <link rel="stylesheet" href="/style.css?v=1002">
+  <link rel="stylesheet" href="/style.css?v=1003">
 </head>
 <body>
 <div class="shell">
@@ -90,12 +90,11 @@
 
       <section id="dealerPanel" class="panel hidden">
         <h2>Panel Dealer</h2>
-        <p>Dealer mengelola meja dan tidak ikut menerima kartu.</p>
+        <p>Dealer hanya mengelola room, membagikan kartu, dan memulai ronde. Dealer tidak menentukan taruhan pembuka.</p>
+
         <div id="dealerPlayers"></div>
 
         <div id="startControls">
-          <label for="bbAmount">Big Blind — taruhan awal</label>
-          <input id="bbAmount" type="number" min="1" value="2">
           <button id="startRound" class="primary" type="button">MULAI RONDE</button>
         </div>
 
@@ -196,10 +195,8 @@
 
 </div>
 
-<script src="/socket.io/socket.io.js?v=1002"></script>
-<script src="/app.js?v=1002"></script>
+<script src="/socket.io/socket.io.js?v=1003"></script>
+<script src="/app.js?v=1003"></script>
 </body>
 </html>
-
-
 
