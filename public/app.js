@@ -1,4 +1,5 @@
- (() => {
+
+(() => {
   "use strict";
 
   const $ = id => document.getElementById(id);
@@ -11,243 +12,339 @@
   let pendingTopupId = null;
   let lastRoom = null;
 
-  const renderedCards = new WeakMap();
+  let selectedAvatar = null;
+  let currentAvatar = null;
+  let toastTimer = null;
+  let lastCommunitySignature = "";
 
   /* =========================
-     NOTIFIKASI
+     BASIC HELPERS
   ========================= */
 
   function toast(message) {
     $("toast").textContent = message;
     $("toast").classList.add("show");
 
-    setTimeout(() => {
+    clearTimeout(toastTimer);
+
+    toastTimer = setTimeout(() => {
       $("toast").classList.remove("show");
     }, 3000);
   }
 
   function emitAction(action, extra = {}) {
-    socket.emit("player:action", { action, ...extra });
+    socket.emit("player:action", {
+      action,
+      ...extra
+    });
+  }
+
+  function setAvatarPreview(element, avatar, name) {
+    element.innerHTML = "";
+
+    if (avatar) {
+      const img = document.createElement("img");
+      img.src = avatar;
+      img.alt = "Foto profil";
+      element.appendChild(img);
+    } else {
+      const initial = document.createElement("span");
+      initial.textContent =
+        (name || "?").trim().charAt(0).toUpperCase() || "?";
+      element.appendChild(initial);
+    }
+  }
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type.startsWith("image/")) {
+        reject(new Error("File harus berupa gambar."));
+        return;
+      }
+
+      if (file.size > 8 * 1024 * 1024) {
+        reject(new Error("Ukuran foto maksimal 8 MB."));
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onerror = () => {
+        reject(new Error("Gagal membaca foto."));
+      };
+
+      reader.onload = () => {
+        const image = new Image();
+
+        image.onerror = () => {
+          reject(new Error("Foto tidak dapat dibuka."));
+        };
+
+        image.onload = () => {
+          const maxSize = 180;
+          const scale = Math.min(
+            maxSize / image.width,
+            maxSize / image.height,
+            1
+          );
+
+          const canvas = document.createElement("canvas");
+
+          canvas.width = Math.max(
+            1,
+            Math.round(image.width * scale)
+          );
+
+          canvas.height = Math.max(
+            1,
+            Math.round(image.height * scale)
+          );
+
+          const context = canvas.getContext("2d");
+
+          context.drawImage(
+            image,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+
+          resolve(
+            canvas.toDataURL("image/jpeg", 0.72)
+          );
+        };
+
+        image.src = reader.result;
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function getDisplayName(player) {
+    return player.name || "Pemain";
   }
 
   /* =========================
-     ANIMASI CHIP
+     PROFILE
   ========================= */
 
-  function animateChip(fromElement, toElement, count = 3, winner = false) {
-    if (!fromElement || !toElement) return;
+  $("avatarInput").addEventListener("change", async event => {
+    const file = event.target.files[0];
 
-    const from = fromElement.getBoundingClientRect();
-    const to = toElement.getBoundingClientRect();
+    if (!file) return;
 
-    const startX = from.left + from.width / 2;
-    const startY = from.top + from.height / 2;
-    const endX = to.left + to.width / 2;
-    const endY = to.top + to.height / 2;
+    try {
+      selectedAvatar = await compressImage(file);
 
-    for (let i = 0; i < Math.min(count, 8); i++) {
-      const chip = document.createElement("div");
-
-      chip.className = "flying-chip" + (winner ? " to-winner" : "");
-
-      chip.style.left = startX + "px";
-      chip.style.top = startY + "px";
-
-      chip.style.setProperty(
-        "--chip-x",
-        (endX - startX) + "px"
+      setAvatarPreview(
+        $("lobbyAvatarPreview"),
+        selectedAvatar,
+        $("name").value
       );
 
-      chip.style.setProperty(
-        "--chip-y",
-        (endY - startY) + "px"
+      toast("Foto profil berhasil dipilih.");
+    } catch (error) {
+      toast(error.message);
+    }
+
+    event.target.value = "";
+  });
+
+  $("roomAvatarInput").addEventListener("change", async event => {
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    try {
+      selectedAvatar = await compressImage(file);
+
+      setAvatarPreview(
+        $("roomAvatarPreview"),
+        selectedAvatar,
+        $("editName").value
       );
 
-      chip.style.animationDelay = (i * 70) + "ms";
+      toast("Foto baru siap disimpan.");
+    } catch (error) {
+      toast(error.message);
+    }
 
-      document.body.appendChild(chip);
+    event.target.value = "";
+  });
 
-      setTimeout(() => chip.remove(), 1200);
+  $("name").addEventListener("input", () => {
+    setAvatarPreview(
+      $("lobbyAvatarPreview"),
+      selectedAvatar,
+      $("name").value
+    );
+  });
+
+  $("editName").addEventListener("input", () => {
+    setAvatarPreview(
+      $("roomAvatarPreview"),
+      currentAvatar,
+      $("editName").value
+    );
+  });
+
+  function saveProfile() {
+    if (!socket || !socket.connected) {
+      toast("Koneksi server belum tersedia.");
+      return;
+    }
+
+    if (isDealer || !roomCode) {
+      toast("Profil pemain hanya tersedia untuk pemain.");
+      return;
+    }
+
+    const name = $("editName").value.trim();
+
+    if (!name) {
+      toast("Nama pemain tidak boleh kosong.");
+      return;
+    }
+
+    const avatar = selectedAvatar !== null
+      ? selectedAvatar
+      : currentAvatar;
+
+    socket.emit("player:profile", {
+      name,
+      avatar
+    });
+
+    currentAvatar = avatar;
+    selectedAvatar = null;
+
+    $("editName").value = name;
+
+    toast("Profil berhasil diperbarui.");
+  }
+
+  $("saveProfile").addEventListener(
+    "click",
+    saveProfile
+  );
+
+  function updateOwnProfileFromRoom(room) {
+    const me = room.players.find(
+      player => player.id === myId
+    );
+
+    if (!me) return;
+
+    currentAvatar = me.avatar || null;
+
+    if (
+      document.activeElement !== $("editName")
+    ) {
+      $("editName").value = me.name || "";
+    }
+
+    if (selectedAvatar === null) {
+      setAvatarPreview(
+        $("roomAvatarPreview"),
+        currentAvatar,
+        me.name
+      );
     }
   }
 
-  function animatePot() {
-    const pot = document.querySelector(".pot-display");
+  /* =========================
+     CARD ANIMATIONS
+  ========================= */
 
-    if (!pot) return;
+  function renderCards(container, cards, isCommunity = false) {
+    if (!cards || !cards.length) {
+      container.innerHTML =
+        '<span class="placeholder">Menunggu kartu</span>';
 
-    pot.classList.remove("pot-pulse");
+      if (isCommunity) {
+        lastCommunitySignature = "";
+      }
 
-    void pot.offsetWidth;
-
-    pot.classList.add("pot-pulse");
-
-    setTimeout(() => {
-      pot.classList.remove("pot-pulse");
-    }, 650);
-  }
-
-  function animatePotWin(winnerNames) {
-    const pot = document.querySelector(".pot-display");
-
-    if (!pot) return;
-
-    pot.classList.remove("pot-win");
-
-    void pot.offsetWidth;
-
-    pot.classList.add("pot-win");
-
-    const winnerName = winnerNames && winnerNames[0];
-
-    if (!winnerName) return;
-
-    const winnerElement = [...document.querySelectorAll(".player")]
-      .find(player => {
-        const name = player.querySelector("strong");
-        return name && name.textContent === winnerName;
-      });
-
-    if (winnerElement) {
-      animateChip(pot, winnerElement, 6, true);
+      return;
     }
 
-    setTimeout(() => {
-      pot.classList.remove("pot-win");
-    }, 1100);
-  }
+    const signature = JSON.stringify(cards);
 
-  function animateBetChanges(room, previousRoom) {
-    if (!previousRoom) return;
+    if (
+      isCommunity &&
+      signature === lastCommunitySignature
+    ) {
+      return;
+    }
 
-    const pot = document.querySelector(".pot-display");
+    if (isCommunity) {
+      const previousCards = Array.from(
+        container.querySelectorAll(".card")
+      );
 
-    if (!pot) return;
+      const previousCount = previousCards.length;
 
-    const oldPot = Number(previousRoom.pot) || 0;
-    const newPot = Number(room.pot) || 0;
+      if (cards.length < previousCount) {
+        container.innerHTML = "";
+      }
 
-    if (newPot > oldPot) {
-      animatePot();
+      if (cards.length > previousCount) {
+        cards.slice(previousCount).forEach((card, index) => {
+          const el = createCard(card);
 
-      let animated = false;
+          el.style.animationDelay =
+            (index * 550) + "ms";
 
-      room.players.forEach(player => {
-        const oldPlayer = previousRoom.players.find(
-          p => p.id === player.id
-        );
+          container.appendChild(el);
+        });
 
-        const oldBet = oldPlayer
-          ? Number(oldPlayer.streetBet) || 0
-          : 0;
+        lastCommunitySignature = signature;
+        return;
+      }
 
-        const newBet = Number(player.streetBet) || 0;
-
-        if (newBet > oldBet) {
-          const playerElement = [...document.querySelectorAll(".player")]
-            .find(el => {
-              return el.dataset.playerId === String(player.id);
-            });
-
-          if (playerElement) {
-            const difference = newBet - oldBet;
-
-            animateChip(
-              playerElement,
-              pot,
-              Math.min(6, Math.max(2, Math.ceil(difference / 2)))
-            );
-
-            animated = true;
-          }
-        }
-      });
-
-      if (!animated) {
-        const table = document.querySelector(".table");
-
-        if (table) {
-          animateChip(table, pot, 3);
-        }
+      if (cards.length === previousCount) {
+        lastCommunitySignature = signature;
+        return;
       }
     }
 
-    if (
-      previousRoom.stage !== "showdown" &&
-      room.stage === "showdown" &&
-      room.results
-    ) {
-      setTimeout(() => {
-        animatePotWin(room.results.winnerNames);
-      }, 250);
+    container.innerHTML = "";
+
+    cards.forEach((card, index) => {
+      const el = createCard(card);
+
+      if (isCommunity) {
+        el.style.animationDelay =
+          (index * 550) + "ms";
+      }
+
+      container.appendChild(el);
+    });
+
+    if (isCommunity) {
+      lastCommunitySignature = signature;
     }
   }
 
-  /* =========================
-     KARTU
-  ========================= */
-
-  function createCardElement(card, index = 0) {
+  function createCard(card) {
     const el = document.createElement("div");
 
     el.className =
       "card " +
-      (["♥", "♦"].includes(card.suit) ? "red" : "black");
+      (["♥", "♦"].includes(card.suit) ? "red" : "");
 
     el.textContent = card.rank + card.suit;
-    el.style.animationDelay = (index * 120) + "ms";
 
     return el;
   }
 
-  function renderCards(container, cards) {
-    const current = cards || [];
-    const signature = current.map(
-      card => card.rank + card.suit
-    );
-
-    const previous = renderedCards.get(container) || [];
-
-    const sameSequence =
-      previous.length <= signature.length &&
-      previous.every((card, i) => card === signature[i]);
-
-    if (
-      previous.length === signature.length &&
-      sameSequence
-    ) {
-      return;
-    }
-
-    if (!sameSequence) {
-      container.innerHTML = "";
-    }
-
-    if (!current.length) {
-      container.innerHTML =
-        '<span class="placeholder">Belum ada kartu</span>';
-
-      renderedCards.set(container, []);
-      return;
-    }
-
-    const startIndex = sameSequence ? previous.length : 0;
-
-    for (let i = startIndex; i < current.length; i++) {
-      container.appendChild(
-        createCardElement(current[i], i)
-      );
-    }
-
-    renderedCards.set(container, signature);
-  }
-
-  /* =========================
-     PEMAIN
-  ========================= */
-
   function renderCardsInto(parent, cards) {
-    cards.forEach((card, index) => {
+    const wrap = document.createElement("div");
+    wrap.className = "mini-cards";
+
+    cards.forEach(card => {
       const el = document.createElement("span");
 
       el.className =
@@ -255,21 +352,25 @@
         (["♥", "♦"].includes(card.suit) ? "red" : "");
 
       el.textContent = card.rank + card.suit;
-      el.style.animation = "cardIn .35s ease both";
-      el.style.animationDelay = (index * 100) + "ms";
 
-      parent.appendChild(el);
+      wrap.appendChild(el);
     });
+
+    parent.appendChild(wrap);
   }
+
+  /* =========================
+     PLAYER DISPLAY
+  ========================= */
 
   function renderPlayers(players) {
     $("players").innerHTML = "";
 
-    players.forEach((player, index) => {
+    players.forEach(player => {
       const el = document.createElement("div");
 
       el.className = "player";
-      el.dataset.playerId = String(player.id);
+      el.dataset.playerId = player.id;
 
       if (player.isTurn) {
         el.classList.add("active-turn");
@@ -283,14 +384,32 @@
         el.classList.add("all-in-player");
       }
 
-      const seat = document.createElement("small");
-      seat.className = "seat-number";
-      seat.textContent = "SEAT " + (index + 1);
+      const top = document.createElement("div");
+      top.className = "player-top";
+
+      const avatar = document.createElement("div");
+      avatar.className = "player-avatar";
+
+      if (player.avatar) {
+        const img = document.createElement("img");
+
+        img.src = player.avatar;
+        img.alt = "Foto " + getDisplayName(player);
+
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent =
+          getDisplayName(player).charAt(0).toUpperCase();
+      }
 
       const name = document.createElement("strong");
-      name.textContent = player.name;
+      name.className = "player-name";
+      name.textContent = getDisplayName(player);
+
+      top.append(avatar, name);
 
       const chips = document.createElement("div");
+      chips.className = "player-chips";
       chips.textContent = "🪙 " + player.chips + " chip";
 
       const role = document.createElement("div");
@@ -298,19 +417,34 @@
 
       const roles = [];
 
-      if (player.isSmallBlind) roles.push("SMALL BLIND");
-      if (player.isBigBlind) roles.push("BIG BLIND");
-      if (player.isTurn) roles.push("GILIRAN");
-      if (player.folded) roles.push("FOLD");
-      if (player.allIn) roles.push("ALL-IN");
+      if (player.isSmallBlind) {
+        roles.push("SMALL BLIND");
+      }
+
+      if (player.isBigBlind) {
+        roles.push("BIG BLIND");
+      }
+
+      if (player.isTurn) {
+        roles.push("GILIRAN");
+      }
+
+      if (player.folded) {
+        roles.push("FOLD");
+      }
+
+      if (player.allIn) {
+        roles.push("ALL-IN");
+      }
 
       role.textContent = roles.join(" • ");
 
       const bet = document.createElement("div");
+      bet.className = "player-bet";
       bet.textContent =
         "Taruhan ronde: " + player.streetBet;
 
-      el.append(seat, name, chips, role, bet);
+      el.append(top, chips, role, bet);
 
       if (player.publicHand) {
         renderCardsInto(el, player.publicHand);
@@ -328,7 +462,7 @@
   }
 
   /* =========================
-     HASIL PERTANDINGAN
+     RESULTS
   ========================= */
 
   function renderResults(results) {
@@ -340,7 +474,8 @@
     $("results").classList.remove("hidden");
 
     $("winnerText").textContent =
-      "Pemenang: " + results.winnerNames.join(", ");
+      "Pemenang: " +
+      results.winnerNames.join(", ");
 
     $("rankingList").innerHTML = "";
 
@@ -360,7 +495,6 @@
 
       if (player.winner) {
         const badge = document.createElement("b");
-
         badge.textContent = "PEMENANG";
 
         row.appendChild(badge);
@@ -370,27 +504,30 @@
     });
 
     const key =
-      roomCode + "-" + results.winnerNames.join(",");
+      roomCode + "-" +
+      results.winnerNames.join(",");
 
     if (key !== lastWinnerKey) {
       lastWinnerKey = key;
 
       const winner = results.players.find(
-        player => player.winner
+        p => p.winner
       );
 
       $("popupWinner").textContent =
         results.winnerNames.join(" & ");
 
       $("popupHand").textContent =
-        winner ? winner.handName : "Pemenang ronde";
+        winner
+          ? winner.handName
+          : "Pemenang ronde";
 
       $("winnerPopup").classList.remove("hidden");
     }
   }
 
   /* =========================
-     DEALER
+     DEALER DISPLAY
   ========================= */
 
   function renderDealerPlayers(players) {
@@ -404,7 +541,8 @@
       const label = document.createElement("span");
 
       label.textContent =
-        player.name + " — " + player.chips + " chip";
+        player.name + " — " +
+        player.chips + " chip";
 
       row.appendChild(label);
 
@@ -415,7 +553,10 @@
         button.textContent = "SETUJUI ISI ULANG";
 
         button.addEventListener("click", () => {
-          socket.emit("dealer:topup-approve", player.id);
+          socket.emit(
+            "dealer:topup-approve",
+            player.id
+          );
         });
 
         row.appendChild(button);
@@ -426,15 +567,16 @@
   }
 
   /* =========================
-     KONTROL AKSI
+     ACTION CONTROLS
   ========================= */
 
   function updateActionControls(room) {
     const me = room.players.find(
-      player => player.id === myId
+      p => p.id === myId
     );
 
-    const myTurn = room.currentPlayerId === myId;
+    const myTurn =
+      room.currentPlayerId === myId;
 
     const active =
       room.stage !== "waiting" &&
@@ -446,11 +588,18 @@
     );
 
     if (me) {
-      const due = room.currentBet - me.streetBet;
+      const due =
+        room.currentBet - me.streetBet;
 
-      $("check").classList.toggle("hidden", due > 0);
+      $("check").classList.toggle(
+        "hidden",
+        due > 0
+      );
 
-      $("call").classList.toggle("hidden", due <= 0);
+      $("call").classList.toggle(
+        "hidden",
+        due <= 0
+      );
 
       $("call").textContent =
         "CALL " + Math.max(0, due);
@@ -459,9 +608,11 @@
         me.streetBet + me.chips;
 
       $("raiseTo").placeholder =
-        "Raise min. " + (room.currentBet + 1);
+        "Raise min. " +
+        (room.currentBet + 1);
 
-      $("allin").disabled = me.chips <= 0;
+      $("allin").disabled =
+        me.chips <= 0;
 
       $("topupControls").classList.toggle(
         "hidden",
@@ -473,13 +624,110 @@
   }
 
   /* =========================
-     ROOM UPDATE
+     CHIP ANIMATION
+  ========================= */
+
+  function animateChip(fromElement, toElement, count = 3) {
+    if (!fromElement || !toElement) return;
+
+    const from = fromElement.getBoundingClientRect();
+    const to = toElement.getBoundingClientRect();
+
+    const startX = from.left + from.width / 2;
+    const startY = from.top + from.height / 2;
+
+    const endX = to.left + to.width / 2;
+    const endY = to.top + to.height / 2;
+
+    for (let i = 0; i < count; i++) {
+      const chip = document.createElement("div");
+
+      chip.className = "flying-chip";
+
+      chip.style.setProperty(
+        "--chip-start-x",
+        startX + "px"
+      );
+
+      chip.style.setProperty(
+        "--chip-start-y",
+        startY + "px"
+      );
+
+      chip.style.setProperty(
+        "--chip-x",
+        (endX - startX) + "px"
+      );
+
+      chip.style.setProperty(
+        "--chip-y",
+        (endY - startY) + "px"
+      );
+
+      chip.style.animationDelay =
+        (i * 100) + "ms";
+
+      document.body.appendChild(chip);
+
+      setTimeout(() => chip.remove(), 1500);
+    }
+  }
+
+  function animatePot() {
+    const pot = $("potDisplay");
+
+    pot.classList.remove("pot-pulse");
+
+    void pot.offsetWidth;
+
+    pot.classList.add("pot-pulse");
+  }
+
+  function animateBetChanges(room, previousRoom) {
+    if (!previousRoom) return;
+
+    if (room.pot > previousRoom.pot) {
+      animatePot();
+
+      previousRoom.players.forEach(oldPlayer => {
+        const newPlayer = room.players.find(
+          p => p.id === oldPlayer.id
+        );
+
+        if (
+          newPlayer &&
+          newPlayer.streetBet > oldPlayer.streetBet
+        ) {
+          const playerElement = document.querySelector(
+            '.player[data-player-id="' +
+            oldPlayer.id +
+            '"]'
+          );
+
+          animateChip(
+            playerElement,
+            $("potDisplay"),
+            2
+          );
+        }
+      });
+    }
+
+    if (
+      room.stage === "showdown" &&
+      previousRoom.stage !== "showdown" &&
+      room.pot > 0
+    ) {
+      $("potDisplay").classList.add("pot-win");
+    }
+  }
+
+  /* =========================
+     ROOM RENDER
   ========================= */
 
   function renderRoom(room) {
     const previousRoom = lastRoom;
-
-    lastRoom = room;
 
     $("round").textContent = room.round;
     $("status").textContent = room.message;
@@ -490,43 +738,53 @@
 
     renderCards(
       $("communityCards"),
-      room.community
+      room.community,
+      true
     );
 
     renderResults(room.results);
-
     updateActionControls(room);
-
-    animateBetChanges(room, previousRoom);
-
-    const me = room.players.find(
-      player => player.id === myId
-    );
+    updateOwnProfileFromRoom(room);
 
     if (room.currentPlayerId === myId) {
       $("turnInfo").textContent =
         "Giliranmu. Tentukan tindakan.";
     } else if (room.stage === "showdown") {
-      $("turnInfo").textContent = "Ronde selesai.";
+      $("turnInfo").textContent =
+        "Ronde selesai.";
     } else if (room.stage === "waiting") {
       $("turnInfo").textContent =
         "Menunggu dealer memulai ronde.";
     } else {
-      $("turnInfo").textContent =
-        "Menunggu giliran pemain lain.";
+      const current = room.players.find(
+        p => p.id === room.currentPlayerId
+      );
+
+      $("turnInfo").textContent = current
+        ? "Menunggu giliran " + current.name + "."
+        : "Menunggu giliran pemain lain.";
+    }
+
+    if (previousRoom) {
+      animateBetChanges(room, previousRoom);
     }
 
     if (
-      me &&
-      me.chips === 0 &&
-      room.stage === "waiting"
+      room.stage === "waiting" &&
+      room.community.length === 0
     ) {
-      $("topupControls").classList.remove("hidden");
+      renderCards(
+        $("communityCards"),
+        [],
+        true
+      );
     }
+
+    lastRoom = room;
   }
 
   /* =========================
-     KONEKSI SOCKET
+     SOCKET CONNECTION
   ========================= */
 
   socket = io({
@@ -535,7 +793,8 @@
     timeout: 15000
   });
 
-  $("connection").textContent = "MENGHUBUNGKAN...";
+  $("connection").textContent =
+    "MENGHUBUNGKAN...";
 
   socket.on("connect", () => {
     myId = socket.id;
@@ -553,14 +812,15 @@
     $("join").disabled = true;
   });
 
-  socket.on("connect_error", err => {
-    $("connection").textContent = "KONEKSI GAGAL";
+  socket.on("connect_error", error => {
+    $("connection").textContent =
+      "KONEKSI GAGAL";
 
-    toast("Koneksi gagal: " + err.message);
+    toast("Koneksi gagal: " + error.message);
   });
 
   /* =========================
-     MASUK ROOM
+     JOIN ROOM
   ========================= */
 
   function joinRoom(event, data) {
@@ -581,16 +841,20 @@
   }
 
   $("create").addEventListener("click", () => {
-    joinRoom("room:create", {
-      name: $("name").value
-    });
+    const name =
+      $("name").value.trim() || "Dealer";
+
+    joinRoom("room:create", { name });
   });
 
   $("join").addEventListener("click", () => {
-    const code = $("code").value.trim().toUpperCase();
+    const code = $("code").value
+      .trim()
+      .toUpperCase();
 
     if (!code) {
-      return toast("Masukkan kode room.");
+      toast("Masukkan kode room.");
+      return;
     }
 
     joinRoom("room:join", {
@@ -603,9 +867,6 @@
     roomCode = data.code;
     isDealer = data.isDealer;
 
-    lastRoom = null;
-    lastWinnerKey = "";
-
     $("roomCode").textContent = roomCode;
 
     $("lobby").classList.add("hidden");
@@ -615,6 +876,29 @@
       "hidden",
       !isDealer
     );
+
+    $("profile-editor-placeholder");
+
+    if (isDealer) {
+      $("profile-editor-placeholder");
+      $("saveProfile").disabled = true;
+      $("editName").disabled = true;
+    } else {
+      $("saveProfile").disabled = false;
+      $("editName").disabled = false;
+
+      $("editName").value =
+        $("name").value.trim() || "Pemain";
+
+      if (selectedAvatar) {
+        currentAvatar = selectedAvatar;
+      }
+
+      socket.emit("player:profile", {
+        name: $("editName").value,
+        avatar: currentAvatar
+      });
+    }
 
     toast(
       isDealer
@@ -626,7 +910,11 @@
   socket.on("room:update", renderRoom);
 
   socket.on("hand:update", cards => {
-    renderCards($("myHand"), cards);
+    renderCards(
+      $("myHand"),
+      cards,
+      false
+    );
   });
 
   socket.on("dealer:update", data => {
@@ -650,16 +938,21 @@
   });
 
   /* =========================
-     DEALER ACTIONS
+     DEALER BUTTONS
   ========================= */
 
   $("startRound").addEventListener("click", () => {
     const amount = Number($("bbAmount").value);
 
-    if (!Number.isInteger(amount) || amount < 1) {
-      return toast(
+    if (
+      !Number.isInteger(amount) ||
+      amount < 1
+    ) {
+      toast(
         "Masukkan taruhan Big Blind minimal 1 chip."
       );
+
+      return;
     }
 
     socket.emit("dealer:start", amount);
@@ -669,10 +962,11 @@
     socket.emit("dealer:next");
 
     lastWinnerKey = "";
+    lastCommunitySignature = "";
   });
 
   /* =========================
-     PLAYER ACTIONS
+     PLAYER ACTION BUTTONS
   ========================= */
 
   $("check").addEventListener("click", () => {
@@ -692,17 +986,23 @@
   });
 
   $("raise").addEventListener("click", () => {
-    const raiseTo = Number($("raiseTo").value);
+    const raiseTo = Number(
+      $("raiseTo").value
+    );
 
-    if (!Number.isInteger(raiseTo) || raiseTo < 1) {
-      return toast("Masukkan nominal Raise.");
+    if (
+      !Number.isInteger(raiseTo) ||
+      raiseTo < 1
+    ) {
+      toast("Masukkan nominal Raise.");
+      return;
     }
 
     emitAction("raise", { raiseTo });
   });
 
   /* =========================
-     TOP UP CHIP VIRTUAL
+     VIRTUAL CHIP RESET
   ========================= */
 
   $("topupRequest").addEventListener("click", () => {
@@ -710,7 +1010,9 @@
   });
 
   socket.on("topup:waiting", () => {
-    toast("Permintaan isi ulang dikirim ke dealer.");
+    toast(
+      "Permintaan isi ulang dikirim ke dealer."
+    );
 
     $("topupRequest").disabled = true;
   });
@@ -719,7 +1021,7 @@
     $("topupRequest").disabled = false;
 
     toast(
-      amount + " chip virtual berhasil ditambahkan."
+      amount + " chip virtual gratis berhasil ditambahkan."
     );
   });
 
@@ -727,7 +1029,8 @@
     pendingTopupId = data.playerId;
 
     $("topupText").textContent =
-      data.name + " meminta isi ulang 10 chip virtual.";
+      data.name +
+      " meminta isi ulang 10 chip virtual gratis.";
 
     $("topupPopup").classList.remove("hidden");
   });
@@ -750,16 +1053,12 @@
   });
 
   /* =========================
-     POPUP PEMENANG
+     POPUPS & ROOM CODE
   ========================= */
 
   $("closePopup").addEventListener("click", () => {
     $("winnerPopup").classList.add("hidden");
   });
-
-  /* =========================
-     SALIN KODE ROOM
-  ========================= */
 
   $("copy").addEventListener("click", async () => {
     try {
@@ -771,17 +1070,5 @@
     }
   });
 
-  /* =========================
-     GANTI NAMA
-  ========================= */
-
-  $("name").addEventListener("change", () => {
-    if (!isDealer && roomCode) {
-      socket.emit(
-        "player:rename",
-        $("name").value
-      );
-    }
-  });
-
 })();
+
