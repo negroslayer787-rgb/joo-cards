@@ -17,7 +17,7 @@
         <small>TEXAS HOLD'EM 6-MAX</small>
       </div>
     </div>
-    <span id="connection">MEMUAT...</span>
+    <span id="connection">MENGHUBUNGKAN...</span>
   </header>
 
   <main>
@@ -31,10 +31,18 @@
       <div class="entry">
         <label for="name">Nama pemain</label>
         <input id="name" maxlength="18" placeholder="Masukkan nama">
-        <button id="create" class="primary">BUAT ROOM</button>
+
+        <button id="create" class="primary" type="button">
+          BUAT ROOM
+        </button>
+
         <div class="or">ATAU GABUNG ROOM</div>
+
         <input id="code" maxlength="6" placeholder="KODE ROOM">
-        <button id="join" class="secondary">GABUNG ROOM</button>
+
+        <button id="join" class="secondary" type="button">
+          GABUNG ROOM
+        </button>
       </div>
     </section>
 
@@ -44,7 +52,11 @@
           <small>ROOM CODE</small>
           <strong id="roomCode">------</strong>
         </div>
-        <button id="copy" class="secondary small">SALIN KODE</button>
+
+        <button id="copy" class="secondary small" type="button">
+          SALIN KODE
+        </button>
+
         <div class="round">RONDE <b id="round">1</b></div>
       </div>
 
@@ -76,13 +88,18 @@
         </div>
 
         <div id="actionControls" class="controls hidden">
-          <button id="check" class="primary">CHECK</button>
-          <button id="fold" class="secondary">FOLD</button>
+          <button id="check" class="primary" type="button">CHECK</button>
+          <button id="fold" class="secondary" type="button">FOLD</button>
         </div>
 
         <div class="controls">
-          <button id="deal" class="primary hidden">MULAI RONDE</button>
-          <button id="next" class="secondary hidden">RONDE BERIKUTNYA</button>
+          <button id="deal" class="primary hidden" type="button">
+            MULAI RONDE
+          </button>
+
+          <button id="next" class="secondary hidden" type="button">
+            RONDE BERIKUTNYA
+          </button>
         </div>
 
         <section id="results" class="results hidden">
@@ -97,12 +114,8 @@
   <div id="toast" role="status"></div>
 </div>
 
-<script>
-document.getElementById("connection").textContent =
-  "MEMUAT SOCKET.IO...";
-</script>
-<script src="/socket.io/socket.io.js?v=5"></script>
-<script src="/app.js?v=5"></script>
+<script src="/socket.io/socket.io.js?v=6"></script>
+<script src="/app.js?v=6"></script>
 </body>
 </html>
 
