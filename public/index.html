@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Joo Cards</title>
-  <link rel="stylesheet" href="/style.css?v=1001">
+  <link rel="stylesheet" href="/style.css?v=1002">
 </head>
 <body>
 <div class="shell">
@@ -23,9 +23,7 @@
 
   <main>
 
-    <!-- LOBBY -->
     <section id="lobby" class="panel lobby">
-
       <div class="intro">
         <p class="eyebrow">MULTIPLAYER CARD ROOM</p>
         <h2>Welcome to<br><em>Joo Cards.</em></h2>
@@ -33,7 +31,6 @@
       </div>
 
       <div class="entry">
-
         <label for="name">Nama pemain</label>
         <input id="name" maxlength="18" placeholder="Masukkan nama">
 
@@ -41,28 +38,21 @@
           <div class="avatar-preview" id="lobbyAvatarPreview">
             <span>?</span>
           </div>
-
           <div class="avatar-upload-info">
             <strong>Foto profil</strong>
             <small>Pilih foto dari galeri perangkat.</small>
-            <label class="file-button" for="avatarInput">
-              PILIH FOTO
-            </label>
+            <label class="file-button" for="avatarInput">PILIH FOTO</label>
             <input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
           </div>
         </div>
 
         <button id="create" class="primary" type="button">BUAT ROOM</button>
-
         <div class="or">ATAU GABUNG ROOM</div>
-
         <input id="code" maxlength="6" placeholder="KODE ROOM">
         <button id="join" class="secondary" type="button">GABUNG ROOM</button>
-
       </div>
     </section>
 
-    <!-- GAME -->
     <section id="game" class="hidden">
 
       <div class="roombar panel">
@@ -70,15 +60,10 @@
           <small>KODE ROOM</small>
           <strong id="roomCode">------</strong>
         </div>
-
-        <button id="copy" class="secondary small" type="button">
-          SALIN KODE
-        </button>
-
+        <button id="copy" class="secondary small" type="button">SALIN KODE</button>
         <div>RONDE <b id="round">1</b></div>
       </div>
 
-      <!-- PROFILE EDITOR -->
       <section class="panel profile-editor">
         <div class="profile-editor-heading">
           <div>
@@ -95,41 +80,28 @@
             <label for="editName">Nama pemain</label>
             <input id="editName" maxlength="18" placeholder="Nama pemain">
           </div>
-
           <div>
-            <label class="file-button" for="roomAvatarInput">
-              GANTI FOTO
-            </label>
+            <label class="file-button" for="roomAvatarInput">GANTI FOTO</label>
             <input id="roomAvatarInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
           </div>
-
-          <button id="saveProfile" class="primary" type="button">
-            SIMPAN PROFIL
-          </button>
+          <button id="saveProfile" class="primary" type="button">SIMPAN PROFIL</button>
         </div>
       </section>
 
-      <!-- DEALER -->
       <section id="dealerPanel" class="panel hidden">
         <h2>Panel Dealer</h2>
         <p>Dealer mengelola meja dan tidak ikut menerima kartu.</p>
-
         <div id="dealerPlayers"></div>
 
         <div id="startControls">
           <label for="bbAmount">Big Blind — taruhan awal</label>
           <input id="bbAmount" type="number" min="1" value="2">
-          <button id="startRound" class="primary" type="button">
-            MULAI RONDE
-          </button>
+          <button id="startRound" class="primary" type="button">MULAI RONDE</button>
         </div>
 
-        <button id="nextRound" class="secondary hidden" type="button">
-          RONDE BERIKUTNYA
-        </button>
+        <button id="nextRound" class="secondary hidden" type="button">RONDE BERIKUTNYA</button>
       </section>
 
-      <!-- TABLE -->
       <section class="table panel">
 
         <div class="tabletop">
@@ -137,33 +109,47 @@
           <div id="status" class="status">Menunggu pemain...</div>
         </div>
 
-        <div class="pot-display" id="potDisplay">
-          POT: <strong id="pot">0</strong> CHIP
-          <span>Taruhan saat ini: <b id="currentBet">0</b></span>
-        </div>
+        <div class="felt-layout" id="feltLayout" data-count="0">
 
-        <h3>PEMAIN</h3>
-        <div id="players" class="players"></div>
+          <div id="players" class="players"></div>
 
-        <div id="turnInfo" class="turn-info">
-          Menunggu ronde dimulai.
-        </div>
+          <div class="table-center">
 
-        <div class="community">
-          <h3>COMMUNITY CARDS</h3>
-          <div id="communityCards" class="card-area">
-            <span class="placeholder">Menunggu kartu meja</span>
+            <div class="dealer-indicator" id="dealerIndicator">
+              <span class="dealer-chip">D</span>
+              <span>HOUSE DEALER</span>
+            </div>
+
+            <div class="pot-display" id="potDisplay">
+              <span class="pot-label">TOTAL POT</span>
+              <strong id="pot">0</strong>
+              <span class="pot-unit">CHIP</span>
+              <div class="current-bet">
+                Taruhan saat ini: <b id="currentBet">0</b>
+              </div>
+            </div>
+
+            <div id="turnInfo" class="turn-info">
+              Menunggu ronde dimulai.
+            </div>
+
+            <div class="community">
+              <h3>COMMUNITY CARDS</h3>
+              <div id="communityCards" class="card-area">
+                <span class="placeholder">Menunggu kartu meja</span>
+              </div>
+            </div>
+
+            <div class="my-hand">
+              <h3>KARTU PRIBADIMU</h3>
+              <div id="myHand" class="card-area">
+                <span class="placeholder">Menunggu pembagian kartu</span>
+              </div>
+            </div>
+
           </div>
         </div>
 
-        <div class="my-hand">
-          <h3>KARTU PRIBADIMU</h3>
-          <div id="myHand" class="card-area">
-            <span class="placeholder">Menunggu pembagian kartu</span>
-          </div>
-        </div>
-
-        <!-- ACTIONS -->
         <div id="actionControls" class="controls hidden">
           <button id="check" class="primary" type="button">CHECK</button>
           <button id="call" class="primary" type="button">CALL</button>
@@ -173,14 +159,10 @@
           <button id="fold" class="secondary" type="button">FOLD</button>
         </div>
 
-        <!-- TOPUP -->
         <div id="topupControls" class="controls hidden">
-          <button id="topupRequest" class="primary" type="button">
-            MINTA ISI ULANG 10 CHIP
-          </button>
+          <button id="topupRequest" class="primary" type="button">MINTA ISI ULANG 10 CHIP</button>
         </div>
 
-        <!-- RESULTS -->
         <section id="results" class="results hidden">
           <h3>HASIL SHOWDOWN</h3>
           <div id="winnerText"></div>
@@ -191,30 +173,22 @@
     </section>
   </main>
 
-  <!-- WINNER POPUP -->
   <div id="winnerPopup" class="popup hidden">
     <div class="popup-card">
       <div class="trophy">🏆</div>
       <h2>SELAMAT!</h2>
       <h3 id="popupWinner">PEMENANG</h3>
       <p id="popupHand"></p>
-      <button id="closePopup" class="primary" type="button">
-        LANJUTKAN
-      </button>
+      <button id="closePopup" class="primary" type="button">LANJUTKAN</button>
     </div>
   </div>
 
-  <!-- TOPUP POPUP -->
   <div id="topupPopup" class="popup hidden">
     <div class="popup-card">
       <h2>Permintaan Isi Ulang</h2>
       <p id="topupText"></p>
-      <button id="approveTopup" class="primary" type="button">
-        SETUJUI +10 CHIP
-      </button>
-      <button id="closeTopup" class="secondary" type="button">
-        TUTUP
-      </button>
+      <button id="approveTopup" class="primary" type="button">SETUJUI +10 CHIP</button>
+      <button id="closeTopup" class="secondary" type="button">TUTUP</button>
     </div>
   </div>
 
@@ -222,9 +196,10 @@
 
 </div>
 
-<script src="/socket.io/socket.io.js?v=1001"></script>
-<script src="/app.js?v=1001"></script>
+<script src="/socket.io/socket.io.js?v=1002"></script>
+<script src="/app.js?v=1002"></script>
 </body>
 </html>
+
 
 
