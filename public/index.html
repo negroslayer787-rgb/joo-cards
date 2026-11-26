@@ -57,6 +57,10 @@
         <h3>PEMAIN</h3>
         <div id="players" class="players"></div>
 
+        <div class="turn-info" id="turnInfo">
+          Menunggu ronde dimulai.
+        </div>
+
         <div class="community">
           <h3>COMMUNITY CARDS</h3>
           <div id="communityCards" class="card-area">
@@ -71,20 +75,21 @@
           </div>
         </div>
 
+        <div id="actionControls" class="controls hidden">
+          <button id="check" class="primary">CHECK</button>
+          <button id="fold" class="secondary">FOLD</button>
+        </div>
+
+        <div class="controls">
+          <button id="deal" class="primary hidden">MULAI RONDE</button>
+          <button id="next" class="secondary hidden">RONDE BERIKUTNYA</button>
+        </div>
+
         <section id="results" class="results hidden">
           <h3>HASIL SHOWDOWN</h3>
           <div id="winnerText"></div>
           <div id="rankingList"></div>
         </section>
-
-        <div class="controls">
-          <button id="deal" class="primary hidden">BAGIKAN KARTU</button>
-          <button id="flop" class="secondary hidden">BUKA FLOP</button>
-          <button id="turn" class="secondary hidden">BUKA TURN</button>
-          <button id="river" class="secondary hidden">BUKA RIVER</button>
-          <button id="showdown" class="primary hidden">SHOWDOWN</button>
-          <button id="next" class="secondary hidden">RONDE BERIKUTNYA</button>
-        </div>
       </div>
     </section>
   </main>
@@ -93,7 +98,8 @@
 </div>
 
 <script>
-document.getElementById("connection").textContent = "MEMUAT SOCKET.IO...";
+document.getElementById("connection").textContent =
+  "MEMUAT SOCKET.IO...";
 </script>
 <script src="/socket.io/socket.io.js?v=5"></script>
 <script src="/app.js?v=5"></script>
