@@ -1,143 +1,168 @@
 
+"use strict";
+
+const $ = id => document.getElementById(id);
+
 const socket = io({
   reconnection: true,
   timeout: 10000
 });
 
-const $ = id => document.getElementById(id);
-
 let isDealer = false;
 let currentCode = "";
 
-function toast(msg) {
+function toast(message) {
   const el = $("toast");
-  el.textContent = msg;
+  el.textContent = message;
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 3000);
+
+  setTimeout(() => {
+    el.classList.remove("show");
+  }, 3000);
 }
 
-function name() {
+function setConnection(message) {
+  $("connection").textContent = message;
+}
+
+function playerName() {
   return $("name").value.trim() || "Pemain";
 }
 
-// DIAGNOSTIK KONEKSI
 socket.on("connect", () => {
-  toast("TERHUBUNG KE SERVER");
-  console.log("Socket connected:", socket.id);
+  setConnection("TERHUBUNG");
+  toast("Koneksi server berhasil.");
 });
 
 socket.on("disconnect", () => {
-  toast("KONEKSI TERPUTUS");
+  setConnection("TERPUTUS");
+  toast("Koneksi server terputus.");
 });
 
 socket.on("connect_error", error => {
-  toast("ERROR KONEKSI: " + error.message);
+  setConnection("GAGAL TERHUBUNG");
+  toast("Koneksi gagal: " + error.message);
+  console.error(error);
 });
 
-// BUAT ROOM
-$("create").onclick = () => {
-  toast("TOMBOL DIKLIK");
+$("create").addEventListener("click", () => {
+  toast("Mengirim permintaan room...");
 
   if (!socket.connected) {
-    toast("SERVER BELUM TERHUBUNG");
+    toast("Server belum terhubung.");
     return;
   }
 
-  socket.emit("room:create", { name: name() });
-};
+  socket.emit("room:create", {
+    name: playerName()
+  });
+});
 
-// GABUNG ROOM
-$("join").onclick = () => {
+$("join").addEventListener("click", () => {
   if (!socket.connected) {
-    toast("SERVER BELUM TERHUBUNG");
+    toast("Server belum terhubung.");
     return;
   }
 
   socket.emit("room:join", {
-    name: name(),
+    name: playerName(),
     code: $("code").value
   });
-};
+});
 
-// FITUR DEALER
-$("deal").onclick = () => socket.emit("dealer:deal");
-$("reveal").onclick = () => socket.emit("dealer:reveal");
-$("next").onclick = () => socket.emit("dealer:next");
+$("deal").addEventListener("click", () => {
+  socket.emit("dealer:deal");
+});
 
-// SALIN KODE
-$("copy").onclick = async () => {
+$("reveal").addEventListener("click", () => {
+  socket.emit("dealer:reveal");
+});
+
+$("next").addEventListener("click", () => {
+  socket.emit("dealer:next");
+});
+
+$("copy").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(currentCode);
     toast("Kode room disalin.");
   } catch {
     toast("Kode room: " + currentCode);
   }
-};
+});
 
-// ROOM BERHASIL DIBUAT
 socket.on("room:joined", data => {
   currentCode = data.code;
   isDealer = data.isDealer;
 
-  toast("ROOM BERHASIL DIBUAT");
-
   $("lobby").classList.add("hidden");
   $("game").classList.remove("hidden");
   $("roomCode").textContent = currentCode;
+
+  toast("Room berhasil dibuat.");
 });
 
-// PESAN ERROR SERVER
-socket.on("error:notice", msg => toast("SERVER: " + msg));
+socket.on("error:notice", message => {
+  toast(message);
+});
 
-// UPDATE PERMAINAN
 socket.on("room:update", room => {
   $("round").textContent = room.round;
   $("status").textContent = room.message;
   $("players").innerHTML = "";
 
-  room.players.forEach(p => {
+  room.players.forEach(player => {
     const el = document.createElement("div");
     el.className = "player";
 
     const avatar = document.createElement("div");
     avatar.className = "avatar";
-    avatar.textContent = p.name.slice(0, 1).toUpperCase();
+    avatar.textContent = player.name.charAt(0).toUpperCase();
 
-    const nm = document.createElement("div");
-    nm.className = "pname";
-    nm.textContent = p.name;
+    const name = document.createElement("div");
+    name.className = "pname";
+    name.textContent = player.name;
 
     const role = document.createElement("div");
     role.className = "role";
-    role.textContent = p.isDealer ? "DEALER" : "PEMAIN";
+    role.textContent = player.isDealer ? "DEALER" : "PEMAIN";
 
-    el.append(avatar, nm, role);
+    el.append(avatar, name, role);
 
-    if (p.card) {
-      const c = document.createElement("div");
-      c.className = "card " +
-        (["♥", "♦"].includes(p.card.suit) ? "red" : "");
-      c.textContent = p.card.rank + p.card.suit;
-      el.append(c);
-    } else if (p.hasCard) {
-      const c = document.createElement("div");
-      c.className = "card back";
-      c.textContent = "J";
-      el.append(c);
+    if (player.card) {
+      const card = document.createElement("div");
+      card.className = "card " +
+        (["♥", "♦"].includes(player.card.suit) ? "red" : "");
+
+      card.textContent = player.card.rank + player.card.suit;
+      el.append(card);
+    } else if (player.hasCard) {
+      const card = document.createElement("div");
+      card.className = "card back";
+      card.textContent = "J";
+      el.append(card);
     }
 
     $("players").append(el);
   });
 
   $("deal").classList.toggle("hidden", !isDealer);
+
   $("reveal").classList.toggle(
     "hidden",
     !isDealer || room.revealed ||
-    !room.players.some(p => p.hasCard)
+    !room.players.some(player => player.hasCard)
   );
+
   $("next").classList.toggle(
     "hidden",
     !isDealer || !room.revealed
   );
 });
+
+window.addEventListener("error", event => {
+  toast("JavaScript error: " + event.message);
+  console.error(event.error);
+});
+
 
