@@ -1,12 +1,11 @@
 
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Joo Cards - Texas Hold'em</title>
-  <link rel="stylesheet" href="/style.css?v=3">
+  <link rel="stylesheet" href="/style.css?v=4">
 </head>
 <body>
 <div class="shell">
@@ -18,7 +17,7 @@
         <small>TEXAS HOLD'EM 6-MAX</small>
       </div>
     </div>
-    <span id="connection">MENGHUBUNGKAN...</span>
+    <span id="connection">MEMUAT...</span>
   </header>
 
   <main>
@@ -63,7 +62,7 @@
         <div class="community">
           <h3>COMMUNITY CARDS</h3>
           <div id="communityCards" class="card-area">
-            <span class="placeholder">Belum dibagikan</span>
+            <span class="placeholder">Menunggu flop</span>
           </div>
         </div>
 
@@ -75,7 +74,11 @@
         </div>
 
         <div class="controls">
-          <button id="deal" class="primary hidden">BAGIKAN 2 KARTU</button>
+          <button id="deal" class="primary hidden">BAGIKAN KARTU</button>
+          <button id="flop" class="secondary hidden">BUKA FLOP</button>
+          <button id="turn" class="secondary hidden">BUKA TURN</button>
+          <button id="river" class="secondary hidden">BUKA RIVER</button>
+          <button id="showdown" class="primary hidden">SHOWDOWN</button>
           <button id="next" class="secondary hidden">RONDE BERIKUTNYA</button>
         </div>
       </div>
@@ -89,7 +92,8 @@
 document.getElementById("connection").textContent =
   "MEMUAT SOCKET.IO...";
 </script>
-<script src="/socket.io/socket.io.js?v=3"></script>
-<script src="/app.js?v=3"></script>
+<script src="/socket.io/socket.io.js?v=4"></script>
+<script src="/app.js?v=4"></script>
 </body>
 </html>
+
