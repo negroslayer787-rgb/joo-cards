@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Joo Cards</title>
-  <link rel="stylesheet" href="/style.css?v=1003">
+  <link rel="stylesheet" href="/style.css?v=1004">
 </head>
 <body>
 <div class="shell">
@@ -27,7 +27,7 @@
       <div class="intro">
         <p class="eyebrow">MULTIPLAYER CARD ROOM</p>
         <h2>Welcome to<br><em>Joo Cards.</em></h2>
-        <p>Buat room atau bergabung dengan teman.</p>
+        <p>Buat room, bermain bersama teman, atau tantang AI.</p>
       </div>
 
       <div class="entry">
@@ -47,6 +47,11 @@
         </div>
 
         <button id="create" class="primary" type="button">BUAT ROOM</button>
+
+        <button id="createAI" class="secondary" type="button">
+          VS AI — 4 BOT
+        </button>
+
         <div class="or">ATAU GABUNG ROOM</div>
         <input id="code" maxlength="6" placeholder="KODE ROOM">
         <button id="join" class="secondary" type="button">GABUNG ROOM</button>
@@ -195,8 +200,7 @@
 
 </div>
 
-<script src="/socket.io/socket.io.js?v=1003"></script>
-<script src="/app.js?v=1003"></script>
+<script src="/socket.io/socket.io.js?v=1004"></script>
+<script src="/app.js?v=1004"></script>
 </body>
 </html>
-
