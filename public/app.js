@@ -1,5 +1,4 @@
- 
-(() => {
+ (() => {
   "use strict";
 
   const $ = id => document.getElementById(id);
@@ -12,8 +11,11 @@
   let pendingTopupId = null;
   let lastRoom = null;
 
-  // Menyimpan kartu yang sudah ditampilkan
   const renderedCards = new WeakMap();
+
+  /* =========================
+     NOTIFIKASI
+  ========================= */
 
   function toast(message) {
     $("toast").textContent = message;
@@ -28,7 +30,163 @@
     socket.emit("player:action", { action, ...extra });
   }
 
-  // Membuat elemen kartu dengan animasi
+  /* =========================
+     ANIMASI CHIP
+  ========================= */
+
+  function animateChip(fromElement, toElement, count = 3, winner = false) {
+    if (!fromElement || !toElement) return;
+
+    const from = fromElement.getBoundingClientRect();
+    const to = toElement.getBoundingClientRect();
+
+    const startX = from.left + from.width / 2;
+    const startY = from.top + from.height / 2;
+    const endX = to.left + to.width / 2;
+    const endY = to.top + to.height / 2;
+
+    for (let i = 0; i < Math.min(count, 8); i++) {
+      const chip = document.createElement("div");
+
+      chip.className = "flying-chip" + (winner ? " to-winner" : "");
+
+      chip.style.left = startX + "px";
+      chip.style.top = startY + "px";
+
+      chip.style.setProperty(
+        "--chip-x",
+        (endX - startX) + "px"
+      );
+
+      chip.style.setProperty(
+        "--chip-y",
+        (endY - startY) + "px"
+      );
+
+      chip.style.animationDelay = (i * 70) + "ms";
+
+      document.body.appendChild(chip);
+
+      setTimeout(() => chip.remove(), 1200);
+    }
+  }
+
+  function animatePot() {
+    const pot = document.querySelector(".pot-display");
+
+    if (!pot) return;
+
+    pot.classList.remove("pot-pulse");
+
+    void pot.offsetWidth;
+
+    pot.classList.add("pot-pulse");
+
+    setTimeout(() => {
+      pot.classList.remove("pot-pulse");
+    }, 650);
+  }
+
+  function animatePotWin(winnerNames) {
+    const pot = document.querySelector(".pot-display");
+
+    if (!pot) return;
+
+    pot.classList.remove("pot-win");
+
+    void pot.offsetWidth;
+
+    pot.classList.add("pot-win");
+
+    const winnerName = winnerNames && winnerNames[0];
+
+    if (!winnerName) return;
+
+    const winnerElement = [...document.querySelectorAll(".player")]
+      .find(player => {
+        const name = player.querySelector("strong");
+        return name && name.textContent === winnerName;
+      });
+
+    if (winnerElement) {
+      animateChip(pot, winnerElement, 6, true);
+    }
+
+    setTimeout(() => {
+      pot.classList.remove("pot-win");
+    }, 1100);
+  }
+
+  function animateBetChanges(room, previousRoom) {
+    if (!previousRoom) return;
+
+    const pot = document.querySelector(".pot-display");
+
+    if (!pot) return;
+
+    const oldPot = Number(previousRoom.pot) || 0;
+    const newPot = Number(room.pot) || 0;
+
+    if (newPot > oldPot) {
+      animatePot();
+
+      let animated = false;
+
+      room.players.forEach(player => {
+        const oldPlayer = previousRoom.players.find(
+          p => p.id === player.id
+        );
+
+        const oldBet = oldPlayer
+          ? Number(oldPlayer.streetBet) || 0
+          : 0;
+
+        const newBet = Number(player.streetBet) || 0;
+
+        if (newBet > oldBet) {
+          const playerElement = [...document.querySelectorAll(".player")]
+            .find(el => {
+              return el.dataset.playerId === String(player.id);
+            });
+
+          if (playerElement) {
+            const difference = newBet - oldBet;
+
+            animateChip(
+              playerElement,
+              pot,
+              Math.min(6, Math.max(2, Math.ceil(difference / 2)))
+            );
+
+            animated = true;
+          }
+        }
+      });
+
+      if (!animated) {
+        const table = document.querySelector(".table");
+
+        if (table) {
+          animateChip(table, pot, 3);
+        }
+      }
+    }
+
+    if (
+      previousRoom.stage !== "showdown" &&
+      room.stage === "showdown" &&
+      room.results
+    ) {
+      setTimeout(() => {
+        animatePotWin(room.results.winnerNames);
+      }, 250);
+    }
+  }
+
+  /* =========================
+     KARTU
+  ========================= */
+
   function createCardElement(card, index = 0) {
     const el = document.createElement("div");
 
@@ -37,34 +195,31 @@
       (["♥", "♦"].includes(card.suit) ? "red" : "black");
 
     el.textContent = card.rank + card.suit;
-
-    el.style.animation = "cardIn .35s ease both";
     el.style.animationDelay = (index * 120) + "ms";
 
     return el;
   }
 
-  // Render kartu tanpa mengulang animasi kartu lama
   function renderCards(container, cards) {
-    const previous = renderedCards.get(container) || [];
     const current = cards || [];
-
     const signature = current.map(
       card => card.rank + card.suit
     );
 
+    const previous = renderedCards.get(container) || [];
+
+    const sameSequence =
+      previous.length <= signature.length &&
+      previous.every((card, i) => card === signature[i]);
+
     if (
       previous.length === signature.length &&
-      previous.every((card, i) => card === signature[i])
+      sameSequence
     ) {
       return;
     }
 
-    const isSameSequence =
-      previous.length <= signature.length &&
-      previous.every((card, i) => card === signature[i]);
-
-    if (!isSameSequence) {
+    if (!sameSequence) {
       container.innerHTML = "";
     }
 
@@ -76,28 +231,45 @@
       return;
     }
 
-    if (!isSameSequence) {
-      container.innerHTML = "";
-    }
-
-    const startIndex = isSameSequence ? previous.length : 0;
+    const startIndex = sameSequence ? previous.length : 0;
 
     for (let i = startIndex; i < current.length; i++) {
       container.appendChild(
-        createCardElement(current[i], i - startIndex)
+        createCardElement(current[i], i)
       );
     }
 
     renderedCards.set(container, signature);
   }
 
-  // Render pemain
+  /* =========================
+     PEMAIN
+  ========================= */
+
+  function renderCardsInto(parent, cards) {
+    cards.forEach((card, index) => {
+      const el = document.createElement("span");
+
+      el.className =
+        "mini-card " +
+        (["♥", "♦"].includes(card.suit) ? "red" : "");
+
+      el.textContent = card.rank + card.suit;
+      el.style.animation = "cardIn .35s ease both";
+      el.style.animationDelay = (index * 100) + "ms";
+
+      parent.appendChild(el);
+    });
+  }
+
   function renderPlayers(players) {
     $("players").innerHTML = "";
 
     players.forEach((player, index) => {
       const el = document.createElement("div");
+
       el.className = "player";
+      el.dataset.playerId = String(player.id);
 
       if (player.isTurn) {
         el.classList.add("active-turn");
@@ -107,8 +279,11 @@
         el.classList.add("folded-player");
       }
 
-      // Nomor kursi
-      const seat = document.createElement("div");
+      if (player.allIn) {
+        el.classList.add("all-in-player");
+      }
+
+      const seat = document.createElement("small");
       seat.className = "seat-number";
       seat.textContent = "SEAT " + (index + 1);
 
@@ -132,7 +307,8 @@
       role.textContent = roles.join(" • ");
 
       const bet = document.createElement("div");
-      bet.textContent = "Taruhan ronde: " + player.streetBet;
+      bet.textContent =
+        "Taruhan ronde: " + player.streetBet;
 
       el.append(seat, name, chips, role, bet);
 
@@ -140,8 +316,10 @@
         renderCardsInto(el, player.publicHand);
       } else if (player.hasHand && !player.folded) {
         const backs = document.createElement("div");
+
         backs.className = "card-backs";
         backs.textContent = "🂠 🂠";
+
         el.appendChild(backs);
       }
 
@@ -149,23 +327,10 @@
     });
   }
 
-  function renderCardsInto(parent, cards) {
-    cards.forEach((card, index) => {
-      const el = document.createElement("span");
+  /* =========================
+     HASIL PERTANDINGAN
+  ========================= */
 
-      el.className =
-        "mini-card " +
-        (["♥", "♦"].includes(card.suit) ? "red" : "");
-
-      el.textContent = card.rank + card.suit;
-      el.style.animation = "cardIn .3s ease both";
-      el.style.animationDelay = (index * 100) + "ms";
-
-      parent.appendChild(el);
-    });
-  }
-
-  // Hasil showdown
   function renderResults(results) {
     if (!results) {
       $("results").classList.add("hidden");
@@ -179,21 +344,25 @@
 
     $("rankingList").innerHTML = "";
 
-    results.players.forEach((p, i) => {
+    results.players.forEach((player, index) => {
       const row = document.createElement("div");
       row.className = "result-row";
 
       const name = document.createElement("strong");
-      name.textContent = (i + 1) + ". " + p.name;
+
+      name.textContent =
+        (index + 1) + ". " + player.name;
 
       const hand = document.createElement("span");
-      hand.textContent = p.handName;
+      hand.textContent = player.handName;
 
       row.append(name, hand);
 
-      if (p.winner) {
+      if (player.winner) {
         const badge = document.createElement("b");
+
         badge.textContent = "PEMENANG";
+
         row.appendChild(badge);
       }
 
@@ -206,7 +375,9 @@
     if (key !== lastWinnerKey) {
       lastWinnerKey = key;
 
-      const winner = results.players.find(p => p.winner);
+      const winner = results.players.find(
+        player => player.winner
+      );
 
       $("popupWinner").textContent =
         results.winnerNames.join(" & ");
@@ -218,12 +389,16 @@
     }
   }
 
-  // Panel dealer
+  /* =========================
+     DEALER
+  ========================= */
+
   function renderDealerPlayers(players) {
     $("dealerPlayers").innerHTML = "";
 
     players.forEach(player => {
       const row = document.createElement("div");
+
       row.className = "dealer-player-row";
 
       const label = document.createElement("span");
@@ -250,9 +425,15 @@
     });
   }
 
-  // Kontrol aksi pemain
+  /* =========================
+     KONTROL AKSI
+  ========================= */
+
   function updateActionControls(room) {
-    const me = room.players.find(p => p.id === myId);
+    const me = room.players.find(
+      player => player.id === myId
+    );
+
     const myTurn = room.currentPlayerId === myId;
 
     const active =
@@ -268,6 +449,7 @@
       const due = room.currentBet - me.streetBet;
 
       $("check").classList.toggle("hidden", due > 0);
+
       $("call").classList.toggle("hidden", due <= 0);
 
       $("call").textContent =
@@ -290,8 +472,13 @@
     }
   }
 
-  // Render room
+  /* =========================
+     ROOM UPDATE
+  ========================= */
+
   function renderRoom(room) {
+    const previousRoom = lastRoom;
+
     lastRoom = room;
 
     $("round").textContent = room.round;
@@ -301,13 +488,20 @@
 
     renderPlayers(room.players);
 
-    // Community cards: animasi hanya untuk kartu baru
-    renderCards($("communityCards"), room.community);
+    renderCards(
+      $("communityCards"),
+      room.community
+    );
 
     renderResults(room.results);
+
     updateActionControls(room);
 
-    const me = room.players.find(p => p.id === myId);
+    animateBetChanges(room, previousRoom);
+
+    const me = room.players.find(
+      player => player.id === myId
+    );
 
     if (room.currentPlayerId === myId) {
       $("turnInfo").textContent =
@@ -322,12 +516,19 @@
         "Menunggu giliran pemain lain.";
     }
 
-    if (me && me.chips === 0 && room.stage === "waiting") {
+    if (
+      me &&
+      me.chips === 0 &&
+      room.stage === "waiting"
+    ) {
       $("topupControls").classList.remove("hidden");
     }
   }
 
-  // Koneksi server
+  /* =========================
+     KONEKSI SOCKET
+  ========================= */
+
   socket = io({
     transports: ["polling"],
     reconnection: true,
@@ -354,10 +555,14 @@
 
   socket.on("connect_error", err => {
     $("connection").textContent = "KONEKSI GAGAL";
+
     toast("Koneksi gagal: " + err.message);
   });
 
-  // Masuk room
+  /* =========================
+     MASUK ROOM
+  ========================= */
+
   function joinRoom(event, data) {
     if (!socket.connected) {
       toast("Server belum terhubung.");
@@ -394,17 +599,22 @@
     });
   });
 
-  // Room berhasil dimasuki
   socket.on("room:joined", data => {
     roomCode = data.code;
     isDealer = data.isDealer;
+
+    lastRoom = null;
+    lastWinnerKey = "";
 
     $("roomCode").textContent = roomCode;
 
     $("lobby").classList.add("hidden");
     $("game").classList.remove("hidden");
 
-    $("dealerPanel").classList.toggle("hidden", !isDealer);
+    $("dealerPanel").classList.toggle(
+      "hidden",
+      !isDealer
+    );
 
     toast(
       isDealer
@@ -415,12 +625,10 @@
 
   socket.on("room:update", renderRoom);
 
-  // Kartu pribadi
   socket.on("hand:update", cards => {
     renderCards($("myHand"), cards);
   });
 
-  // Update dealer
   socket.on("dealer:update", data => {
     if (!isDealer) return;
 
@@ -441,7 +649,10 @@
     toast(message);
   });
 
-  // Mulai ronde
+  /* =========================
+     DEALER ACTIONS
+  ========================= */
+
   $("startRound").addEventListener("click", () => {
     const amount = Number($("bbAmount").value);
 
@@ -456,10 +667,14 @@
 
   $("nextRound").addEventListener("click", () => {
     socket.emit("dealer:next");
+
     lastWinnerKey = "";
   });
 
-  // Aksi poker
+  /* =========================
+     PLAYER ACTIONS
+  ========================= */
+
   $("check").addEventListener("click", () => {
     emitAction("check");
   });
@@ -486,13 +701,17 @@
     emitAction("raise", { raiseTo });
   });
 
-  // Permintaan chip virtual gratis
+  /* =========================
+     TOP UP CHIP VIRTUAL
+  ========================= */
+
   $("topupRequest").addEventListener("click", () => {
     socket.emit("player:topup-request");
   });
 
   socket.on("topup:waiting", () => {
     toast("Permintaan isi ulang dikirim ke dealer.");
+
     $("topupRequest").disabled = true;
   });
 
@@ -530,21 +749,32 @@
     $("topupPopup").classList.add("hidden");
   });
 
+  /* =========================
+     POPUP PEMENANG
+  ========================= */
+
   $("closePopup").addEventListener("click", () => {
     $("winnerPopup").classList.add("hidden");
   });
 
-  // Salin kode room
+  /* =========================
+     SALIN KODE ROOM
+  ========================= */
+
   $("copy").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(roomCode);
+
       toast("Kode room disalin.");
     } catch {
       toast("Kode room: " + roomCode);
     }
   });
 
-  // Ganti nama pemain
+  /* =========================
+     GANTI NAMA
+  ========================= */
+
   $("name").addEventListener("change", () => {
     if (!isDealer && roomCode) {
       socket.emit(
@@ -555,5 +785,3 @@
   });
 
 })();
-
-
