@@ -1,3 +1,5 @@
+
+
 (() => {
   "use strict";
 
@@ -32,6 +34,7 @@
     el.classList.add("show");
 
     clearTimeout(el._timer);
+
     el._timer = setTimeout(() => {
       el.classList.remove("show");
     }, 2600);
@@ -91,8 +94,11 @@
 
       visible("lobby", false);
       visible("game", true);
-      visible("dealerPanel", isDealer);
-      visible("startControls", isDealer);
+
+      // Pada VS AI, panel mengendalikan ronde AI Dealer,
+      // bukan menjadikan pemain manusia sebagai dealer.
+      visible("dealerPanel", isDealer || isAI);
+      visible("startControls", isDealer || isAI);
       visible("topupControls", false);
 
       updateDealerUI();
@@ -118,13 +124,41 @@
   }
 
   function updateDealerUI() {
-    visible("dealerPanel", isDealer);
-    visible("startControls", isDealer);
-    visible("startRound", isDealer);
+    const hasControl = isDealer || isAI;
+
+    visible("dealerPanel", hasControl);
+    visible("startControls", hasControl);
+    visible("startRound", hasControl);
     visible("nextRound", false);
+
+    const heading = $("dealerPanel")?.querySelector("h2");
+    const description = $("dealerPanel")?.querySelector("p");
+
+    if (isAI) {
+      if (heading) heading.textContent = "AI DEALER";
+      if (description) {
+        description.textContent =
+          "Dealer otomatis mengelola pembagian kartu dan jalannya ronde.";
+      }
+
+      if ($("startRound")) {
+        $("startRound").textContent = "MULAI RONDE";
+      }
+
+      if ($("nextRound")) {
+        $("nextRound").textContent = "RONDE BERIKUTNYA";
+      }
+    }
 
     if ($("dealerIndicator")) {
       $("dealerIndicator").style.display = "flex";
+
+      if (isAI) {
+        $("dealerIndicator").innerHTML = `
+          <div class="dealer-chip">D</div>
+          <span>AI DEALER</span>
+        `;
+      }
     }
   }
 
@@ -144,6 +178,7 @@
     }
 
     const button = $("createAI");
+
     if (button) {
       button.disabled = true;
       button.textContent = "MEMBUAT ROOM AI...";
@@ -182,17 +217,45 @@
     });
   }
 
+  // Kartu utama mengikuti class asli dari style.css: .card
   function cardHTML(card, hidden = false) {
     if (hidden || !card) {
-      return `<div class="playing-card card-back">?</div>`;
+      return `
+        <div class="card card-empty" aria-label="Kartu tertutup">
+          <span>?</span>
+        </div>
+      `;
     }
+
+    const red = card.suit === "♥" || card.suit === "♦";
+    const colorClass = red ? "red" : "";
+
+    return `
+      <div class="card ${colorClass}">
+        <span>${escapeHTML(card.rank)}</span>
+        <span>${escapeHTML(card.suit)}</span>
+      </div>
+    `;
+  }
+
+  function miniCardHTML(card) {
+    if (!card) return "";
 
     const red = card.suit === "♥" || card.suit === "♦";
 
     return `
-      <div class="playing-card ${red ? "red" : "black"}">
+      <div class="mini-card ${red ? "red" : ""}">
         <span>${escapeHTML(card.rank)}</span>
         <span>${escapeHTML(card.suit)}</span>
+      </div>
+    `;
+  }
+
+  function cardBacksHTML() {
+    return `
+      <div class="card-backs">
+        <div class="card-back"></div>
+        <div class="card-back"></div>
       </div>
     `;
   }
@@ -203,64 +266,83 @@
 
     container.innerHTML = "";
 
-    room.players.forEach(player => {
+    room.players.forEach((player, index) => {
       const isMe = player.id === myId;
       const isTurn = player.id === room.turnId;
 
       const avatar = player.avatar
         ? `<img src="${player.avatar}" alt="Foto profil">`
-        : `<span class="avatar-placeholder">${escapeHTML((player.name || "?")[0])}</span>`;
-
-      const cards = player.hand || [];
+        : escapeHTML((player.name || "?")[0].toUpperCase());
 
       const showCards =
         isMe ||
         (room.phase === "showdown" && !player.folded);
 
       const cardsHTML = showCards
-        ? cards.map(card => cardHTML(card)).join("")
-        : (room.phase !== "waiting"
-          ? cardHTML(null, true) + cardHTML(null, true)
-          : "");
+        ? `<div class="mini-cards">
+            ${(player.hand || []).map(miniCardHTML).join("")}
+           </div>`
+        : room.phase !== "waiting"
+          ? cardBacksHTML()
+          : "";
 
       const seat = document.createElement("div");
 
       seat.className = [
-        "player-seat",
+        "player",
+        `seat-${index}`,
         isMe ? "my-seat" : "",
         isTurn ? "active-turn" : "",
-        player.folded ? "folded" : "",
+        player.folded ? "folded-player" : "",
+        player.allIn ? "all-in-player" : "",
         player.isAI ? "ai-player" : ""
       ].filter(Boolean).join(" ");
 
       seat.innerHTML = `
-        <div class="player-avatar">${avatar}</div>
+        <div class="player-top">
+          <div class="player-avatar">${avatar}</div>
 
-        <div class="player-info">
-          <strong>${escapeHTML(player.name)}</strong>
+          <div style="min-width:0">
+            <div class="player-name">
+              ${escapeHTML(player.name)}
+            </div>
 
-          ${player.isAI ? '<small class="ai-label">AI NORMAL</small>' : ""}
-          ${isMe ? "<small>YOU</small>" : ""}
-          ${player.isDealer ? "<small>DEALER</small>" : ""}
-          ${player.folded ? "<small>FOLD</small>" : ""}
-          ${player.allIn ? "<small>ALL IN</small>" : ""}
+            ${player.isAI
+              ? '<div class="role">AI PLAYER</div>'
+              : isMe
+                ? '<div class="role">YOU · PLAYER</div>'
+                : '<div class="role">PLAYER</div>'
+            }
 
-          <div class="player-chips">${player.chips} chip</div>
-
-          ${
-            player.bet > 0
-              ? `<div class="player-bet">Bet: ${player.bet}</div>`
+            ${player.folded
+              ? '<div class="role">FOLD</div>'
               : ""
-          }
+            }
+
+            ${player.allIn
+              ? '<div class="role">ALL IN</div>'
+              : ""
+            }
+          </div>
         </div>
 
-        <div class="player-cards">${cardsHTML}</div>
+        <div class="player-chips">
+          ${player.chips} chip
+        </div>
+
+        ${player.bet > 0
+          ? `<div class="player-bet">Bet: ${player.bet}</div>`
+          : ""
+        }
+
+        ${cardsHTML}
       `;
 
       container.appendChild(seat);
     });
 
     const felt = $("feltLayout");
+
     if (felt) {
       felt.dataset.count = String(room.players.length);
     }
@@ -278,14 +360,26 @@
       return;
     }
 
-    (room.community || []).forEach(card => {
-      target.insertAdjacentHTML("beforeend", cardHTML(card));
+    (room.community || []).forEach((card, index) => {
+      const html = cardHTML(card);
+
+      target.insertAdjacentHTML("beforeend", html);
+
+      const lastCard = target.lastElementChild;
+
+      if (lastCard) {
+        lastCard.classList.add("community-deal");
+        lastCard.style.setProperty(
+          "--deal-delay",
+          `${index * 130}ms`
+        );
+      }
     });
 
     for (let i = room.community.length; i < 5; i++) {
       target.insertAdjacentHTML(
         "beforeend",
-        '<div class="playing-card card-empty"></div>'
+        '<div class="card card-empty"></div>'
       );
     }
   }
@@ -303,13 +397,26 @@
     }
 
     target.innerHTML = me.hand
-      .map(card => cardHTML(card))
+      .map((card, index) => {
+        return cardHTML(card).replace(
+          'class="card ',
+          `class="card private-deal `
+        ).replace(
+          'class="card private-deal ',
+          `style="--deal-delay:${index * 160}ms" class="card private-deal `
+        );
+      })
       .join("");
   }
 
   function renderPot(room) {
-    if ($("pot")) $("pot").textContent = room.pot ?? 0;
-    if ($("potDisplay")) $("potDisplay").dataset.total = room.pot ?? 0;
+    if ($("pot")) {
+      $("pot").textContent = room.pot ?? 0;
+    }
+
+    if ($("potDisplay")) {
+      $("potDisplay").dataset.total = room.pot ?? 0;
+    }
 
     if ($("currentBet")) {
       $("currentBet").textContent = room.currentBet ?? 0;
@@ -439,6 +546,7 @@
         .sort((a, b) => b.chips - a.chips)
         .forEach((player, index) => {
           const item = document.createElement("div");
+
           item.textContent =
             `${index + 1}. ${player.name} — ${player.chips} chip`;
 
@@ -470,21 +578,25 @@
 
     visible(
       "topupControls",
-      !!me && me.chips <= 0 && room.phase === "waiting"
+      !!me &&
+      me.chips <= 0 &&
+      room.phase === "waiting"
     );
 
-    visible(
-      "startRound",
-      isDealer &&
-      (room.phase === "waiting" || room.phase === "showdown")
-    );
+    const canStart =
+      (isDealer || isAI) &&
+      (room.phase === "waiting" || room.phase === "showdown");
 
-    visible(
-      "nextRound",
-      isDealer && room.phase === "showdown"
-    );
+    visible("startRound", canStart);
+    visible("nextRound", (isDealer || isAI) && room.phase === "showdown");
+    visible("dealerPanel", isDealer || isAI);
 
-    visible("dealerPanel", isDealer);
+    if (isAI && $("startRound")) {
+      $("startRound").textContent =
+        room.phase === "showdown"
+          ? "MULAI RONDE"
+          : "MULAI RONDE";
+    }
   }
 
   function sendAction(action, amount = 0) {
@@ -555,9 +667,11 @@
 
           if (preview) {
             preview.innerHTML = "";
+
             const img = document.createElement("img");
             img.src = avatar;
             img.alt = "Foto profil";
+
             preview.appendChild(img);
           }
 
@@ -573,6 +687,7 @@
 
   function bind(id, event, callback) {
     const element = $(id);
+
     if (element) {
       element.addEventListener(event, callback);
     }
