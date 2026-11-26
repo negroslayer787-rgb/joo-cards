@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Joo Cards</title>
-  <link rel="stylesheet" href="/style.css?v=3">
+  <link rel="stylesheet" href="/style.css?v=999">
 </head>
 <body>
 <div class="shell">
@@ -31,9 +31,7 @@
       <div class="entry">
         <label for="name">Nama pemain</label>
         <input id="name" maxlength="18" placeholder="Masukkan nama">
-
         <button id="create" class="primary" type="button">BUAT ROOM</button>
-
         <div class="or">ATAU GABUNG ROOM</div>
         <input id="code" maxlength="6" placeholder="KODE ROOM">
         <button id="join" class="secondary" type="button">GABUNG ROOM</button>
@@ -53,18 +51,13 @@
       <section id="dealerPanel" class="panel hidden">
         <h2>Panel Dealer</h2>
         <p>Dealer mengelola meja dan tidak ikut menerima kartu.</p>
-
         <div id="dealerPlayers"></div>
-
         <div id="startControls">
           <label for="bbAmount">Big Blind — taruhan awal</label>
           <input id="bbAmount" type="number" min="1" value="2">
           <button id="startRound" class="primary" type="button">MULAI RONDE</button>
         </div>
-
-        <button id="nextRound" class="secondary hidden" type="button">
-          RONDE BERIKUTNYA
-        </button>
+        <button id="nextRound" class="secondary hidden" type="button">RONDE BERIKUTNYA</button>
       </section>
 
       <section class="table panel">
@@ -80,7 +73,6 @@
 
         <h3>PEMAIN</h3>
         <div id="players" class="players"></div>
-
         <div id="turnInfo" class="turn-info">Menunggu ronde dimulai.</div>
 
         <div class="community">
@@ -107,9 +99,7 @@
         </div>
 
         <div id="topupControls" class="controls hidden">
-          <button id="topupRequest" class="primary" type="button">
-            MINTA ISI ULANG 10 CHIP
-          </button>
+          <button id="topupRequest" class="primary" type="button">MINTA ISI ULANG 10 CHIP</button>
         </div>
 
         <section id="results" class="results hidden">
@@ -135,9 +125,7 @@
     <div class="popup-card">
       <h2>Permintaan Isi Ulang</h2>
       <p id="topupText"></p>
-      <button id="approveTopup" class="primary" type="button">
-        SETUJUI +10 CHIP
-      </button>
+      <button id="approveTopup" class="primary" type="button">SETUJUI +10 CHIP</button>
       <button id="closeTopup" class="secondary" type="button">TUTUP</button>
     </div>
   </div>
@@ -149,5 +137,6 @@
 <script src="/app.js?v=7"></script>
 </body>
 </html>
+
 
 
