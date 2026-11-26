@@ -16,6 +16,8 @@
   let currentAvatar = null;
   let toastTimer = null;
   let lastCommunitySignature = "";
+  let lastCommunityCards = [];
+  let lastHandSignature = "";
 
   /* =========================
      BASIC HELPERS
@@ -33,6 +35,11 @@
   }
 
   function emitAction(action, extra = {}) {
+    if (!socket || !socket.connected) {
+      toast("Koneksi server terputus.");
+      return;
+    }
+
     socket.emit("player:action", {
       action,
       ...extra
@@ -40,6 +47,8 @@
   }
 
   function setAvatarPreview(element, avatar, name) {
+    if (!element) return;
+
     element.innerHTML = "";
 
     if (avatar) {
@@ -49,8 +58,10 @@
       element.appendChild(img);
     } else {
       const initial = document.createElement("span");
+
       initial.textContent =
         (name || "?").trim().charAt(0).toUpperCase() || "?";
+
       element.appendChild(initial);
     }
   }
@@ -82,6 +93,7 @@
 
         image.onload = () => {
           const maxSize = 180;
+
           const scale = Math.min(
             maxSize / image.width,
             maxSize / image.height,
@@ -225,10 +237,7 @@
     toast("Profil berhasil diperbarui.");
   }
 
-  $("saveProfile").addEventListener(
-    "click",
-    saveProfile
-  );
+  $("saveProfile").addEventListener("click", saveProfile);
 
   function updateOwnProfileFromRoom(room) {
     const me = room.players.find(
@@ -239,9 +248,7 @@
 
     currentAvatar = me.avatar || null;
 
-    if (
-      document.activeElement !== $("editName")
-    ) {
+    if (document.activeElement !== $("editName")) {
       $("editName").value = me.name || "";
     }
 
@@ -255,16 +262,38 @@
   }
 
   /* =========================
-     CARD ANIMATIONS
+     CARD CREATION
   ========================= */
 
-  function renderCards(container, cards, isCommunity = false) {
+  function createCard(card, animationClass = "") {
+    const el = document.createElement("div");
+
+    el.className =
+      "card " +
+      (["♥", "♦"].includes(card.suit) ? "red " : "") +
+      animationClass;
+
+    el.textContent = card.rank + card.suit;
+
+    return el;
+  }
+
+  function renderCards(
+    container,
+    cards,
+    type = "normal"
+  ) {
     if (!cards || !cards.length) {
       container.innerHTML =
         '<span class="placeholder">Menunggu kartu</span>';
 
-      if (isCommunity) {
+      if (type === "community") {
         lastCommunitySignature = "";
+        lastCommunityCards = [];
+      }
+
+      if (type === "private") {
+        lastHandSignature = "";
       }
 
       return;
@@ -272,76 +301,72 @@
 
     const signature = JSON.stringify(cards);
 
-    if (
-      isCommunity &&
-      signature === lastCommunitySignature
-    ) {
-      return;
-    }
-
-    if (isCommunity) {
-      const previousCards = Array.from(
-        container.querySelectorAll(".card")
-      );
-
-      const previousCount = previousCards.length;
-
-      if (cards.length < previousCount) {
-        container.innerHTML = "";
+    if (type === "community") {
+      if (signature === lastCommunitySignature) {
+        return;
       }
 
-      if (cards.length > previousCount) {
-        cards.slice(previousCount).forEach((card, index) => {
-          const el = createCard(card);
+      const oldCards = lastCommunityCards;
+      const isExtension =
+        cards.length > oldCards.length &&
+        oldCards.every((card, index) =>
+          JSON.stringify(card) === JSON.stringify(cards[index])
+        );
 
-          el.style.animationDelay =
-            (index * 550) + "ms";
+      if (isExtension) {
+        cards.slice(oldCards.length).forEach((card, index) => {
+          const el = createCard(card, "community-deal");
+
+          el.style.animationDelay = (index * 550) + "ms";
 
           container.appendChild(el);
         });
+      } else {
+        container.innerHTML = "";
 
-        lastCommunitySignature = signature;
-        return;
+        cards.forEach((card, index) => {
+          const el = createCard(card, "community-deal");
+
+          el.style.animationDelay = (index * 550) + "ms";
+
+          container.appendChild(el);
+        });
       }
 
-      if (cards.length === previousCount) {
-        lastCommunitySignature = signature;
-        return;
-      }
+      lastCommunityCards = cards.map(card => ({ ...card }));
+      lastCommunitySignature = signature;
+
+      return;
+    }
+
+    if (type === "private") {
+      if (signature === lastHandSignature) return;
+
+      container.innerHTML = "";
+
+      cards.forEach((card, index) => {
+        const el = createCard(card, "private-deal");
+
+        el.style.animationDelay = (index * 350) + "ms";
+
+        container.appendChild(el);
+      });
+
+      lastHandSignature = signature;
+
+      return;
     }
 
     container.innerHTML = "";
 
-    cards.forEach((card, index) => {
-      const el = createCard(card);
-
-      if (isCommunity) {
-        el.style.animationDelay =
-          (index * 550) + "ms";
-      }
-
-      container.appendChild(el);
+    cards.forEach(card => {
+      container.appendChild(createCard(card));
     });
-
-    if (isCommunity) {
-      lastCommunitySignature = signature;
-    }
-  }
-
-  function createCard(card) {
-    const el = document.createElement("div");
-
-    el.className =
-      "card " +
-      (["♥", "♦"].includes(card.suit) ? "red" : "");
-
-    el.textContent = card.rank + card.suit;
-
-    return el;
   }
 
   function renderCardsInto(parent, cards) {
     const wrap = document.createElement("div");
+
     wrap.className = "mini-cards";
 
     cards.forEach(card => {
@@ -360,16 +385,23 @@
   }
 
   /* =========================
-     PLAYER DISPLAY
+     PLAYER TABLE
   ========================= */
 
   function renderPlayers(players) {
-    $("players").innerHTML = "";
+    const container = $("players");
+    const layout = $("feltLayout");
 
-    players.forEach(player => {
+    container.innerHTML = "";
+
+    if (layout) {
+      layout.dataset.count = String(players.length);
+    }
+
+    players.forEach((player, index) => {
       const el = document.createElement("div");
 
-      el.className = "player";
+      el.className = "player seat-" + (index % 6);
       el.dataset.playerId = player.id;
 
       if (player.isTurn) {
@@ -403,16 +435,19 @@
       }
 
       const name = document.createElement("strong");
+
       name.className = "player-name";
       name.textContent = getDisplayName(player);
 
       top.append(avatar, name);
 
       const chips = document.createElement("div");
+
       chips.className = "player-chips";
       chips.textContent = "🪙 " + player.chips + " chip";
 
       const role = document.createElement("div");
+
       role.className = "role";
 
       const roles = [];
@@ -440,6 +475,7 @@
       role.textContent = roles.join(" • ");
 
       const bet = document.createElement("div");
+
       bet.className = "player-bet";
       bet.textContent =
         "Taruhan ronde: " + player.streetBet;
@@ -457,7 +493,7 @@
         el.appendChild(backs);
       }
 
-      $("players").appendChild(el);
+      container.appendChild(el);
     });
   }
 
@@ -481,6 +517,7 @@
 
     results.players.forEach((player, index) => {
       const row = document.createElement("div");
+
       row.className = "result-row";
 
       const name = document.createElement("strong");
@@ -489,12 +526,14 @@
         (index + 1) + ". " + player.name;
 
       const hand = document.createElement("span");
+
       hand.textContent = player.handName;
 
       row.append(name, hand);
 
       if (player.winner) {
         const badge = document.createElement("b");
+
         badge.textContent = "PEMENANG";
 
         row.appendChild(badge);
@@ -511,7 +550,7 @@
       lastWinnerKey = key;
 
       const winner = results.players.find(
-        p => p.winner
+        player => player.winner
       );
 
       $("popupWinner").textContent =
@@ -523,6 +562,8 @@
           : "Pemenang ronde";
 
       $("winnerPopup").classList.remove("hidden");
+
+      $("potDisplay").classList.add("pot-win");
     }
   }
 
@@ -572,7 +613,7 @@
 
   function updateActionControls(room) {
     const me = room.players.find(
-      p => p.id === myId
+      player => player.id === myId
     );
 
     const myTurn =
@@ -624,7 +665,7 @@
   }
 
   /* =========================
-     CHIP ANIMATION
+     CHIP ANIMATIONS
   ========================= */
 
   function animateChip(fromElement, toElement, count = 3) {
@@ -691,7 +732,7 @@
 
       previousRoom.players.forEach(oldPlayer => {
         const newPlayer = room.players.find(
-          p => p.id === oldPlayer.id
+          player => player.id === oldPlayer.id
         );
 
         if (
@@ -712,14 +753,6 @@
         }
       });
     }
-
-    if (
-      room.stage === "showdown" &&
-      previousRoom.stage !== "showdown" &&
-      room.pot > 0
-    ) {
-      $("potDisplay").classList.add("pot-win");
-    }
   }
 
   /* =========================
@@ -739,10 +772,11 @@
     renderCards(
       $("communityCards"),
       room.community,
-      true
+      "community"
     );
 
     renderResults(room.results);
+
     updateActionControls(room);
     updateOwnProfileFromRoom(room);
 
@@ -757,7 +791,7 @@
         "Menunggu dealer memulai ronde.";
     } else {
       const current = room.players.find(
-        p => p.id === room.currentPlayerId
+        player => player.id === room.currentPlayerId
       );
 
       $("turnInfo").textContent = current
@@ -776,7 +810,13 @@
       renderCards(
         $("communityCards"),
         [],
-        true
+        "community"
+      );
+
+      renderCards(
+        $("myHand"),
+        [],
+        "private"
       );
     }
 
@@ -793,8 +833,7 @@
     timeout: 15000
   });
 
-  $("connection").textContent =
-    "MENGHUBUNGKAN...";
+  $("connection").textContent = "MENGHUBUNGKAN...";
 
   socket.on("connect", () => {
     myId = socket.id;
@@ -813,8 +852,7 @@
   });
 
   socket.on("connect_error", error => {
-    $("connection").textContent =
-      "KONEKSI GAGAL";
+    $("connection").textContent = "KONEKSI GAGAL";
 
     toast("Koneksi gagal: " + error.message);
   });
@@ -867,6 +905,11 @@
     roomCode = data.code;
     isDealer = data.isDealer;
 
+    lastRoom = null;
+    lastCommunitySignature = "";
+    lastCommunityCards = [];
+    lastHandSignature = "";
+
     $("roomCode").textContent = roomCode;
 
     $("lobby").classList.add("hidden");
@@ -877,10 +920,7 @@
       !isDealer
     );
 
-    $("profile-editor-placeholder");
-
     if (isDealer) {
-      $("profile-editor-placeholder");
       $("saveProfile").disabled = true;
       $("editName").disabled = true;
     } else {
@@ -913,7 +953,7 @@
     renderCards(
       $("myHand"),
       cards,
-      false
+      "private"
     );
   });
 
@@ -963,6 +1003,8 @@
 
     lastWinnerKey = "";
     lastCommunitySignature = "";
+    lastCommunityCards = [];
+    lastHandSignature = "";
   });
 
   /* =========================
@@ -986,9 +1028,7 @@
   });
 
   $("raise").addEventListener("click", () => {
-    const raiseTo = Number(
-      $("raiseTo").value
-    );
+    const raiseTo = Number($("raiseTo").value);
 
     if (
       !Number.isInteger(raiseTo) ||
