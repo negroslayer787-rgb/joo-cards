@@ -1,4 +1,5 @@
  
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -27,32 +28,19 @@ const HAND_NAMES = [
   "Straight Flush", "Royal Flush"
 ];
 
-/* =========================
-   PLAYER PROFILE
-========================= */
-
 function cleanName(name) {
-  return String(name || "Pemain")
-    .trim()
-    .slice(0, 18) || "Pemain";
+  return String(name || "Pemain").trim().slice(0, 18) || "Pemain";
 }
 
 function cleanAvatar(avatar) {
   if (!avatar) return null;
-
   const value = String(avatar);
-
   if (value.length > 180000) return null;
 
-  const validImage =
-    /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(value);
-
-  return validImage ? value : null;
+  return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(value)
+    ? value
+    : null;
 }
-
-/* =========================
-   ROOM & DECK
-========================= */
 
 function makeCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -85,7 +73,7 @@ function makeDeck() {
 }
 
 /* =========================
-   POKER HAND EVALUATION
+   HAND EVALUATION
 ========================= */
 
 function combinations(cards, size) {
@@ -122,14 +110,9 @@ function evaluateFive(cards) {
       value: Number(value),
       count
     }))
-    .sort((a, b) =>
-      b.count - a.count || b.value - a.value
-    );
+    .sort((a, b) => b.count - a.count || b.value - a.value);
 
-  const flush = cards.every(
-    c => c.suit === cards[0].suit
-  );
-
+  const flush = cards.every(c => c.suit === cards[0].suit);
   const unique = [...new Set(values)];
   let straight = 0;
 
@@ -245,9 +228,7 @@ function findPlayer(room, id) {
 }
 
 function activePlayers(room) {
-  return room.players.filter(
-    p => !p.folded && p.hand.length === 2
-  );
+  return room.players.filter(p => !p.folded && p.hand.length === 2);
 }
 
 function actionablePlayers(room) {
@@ -255,10 +236,7 @@ function actionablePlayers(room) {
 }
 
 function pay(player, amount) {
-  const paid = Math.min(
-    player.chips,
-    Math.max(0, amount)
-  );
+  const paid = Math.min(player.chips, Math.max(0, amount));
 
   player.chips -= paid;
   player.streetBet += paid;
@@ -268,6 +246,8 @@ function pay(player, amount) {
 }
 
 function nextPlayer(room, fromIndex, allowedIds) {
+  if (!allowedIds.size) return null;
+
   for (let step = 1; step <= room.players.length; step++) {
     const index = (fromIndex + step) % room.players.length;
     const player = room.players[index];
@@ -305,33 +285,19 @@ function setPending(room, exceptId = null) {
 }
 
 function advanceTurn(room, fromId) {
-  const fromIndex = room.players.findIndex(
-    p => p.id === fromId
-  );
-
+  const fromIndex = room.players.findIndex(p => p.id === fromId);
   const next = nextPlayer(room, fromIndex, room.pending);
 
   room.currentPlayerId = next ? next.id : null;
 }
 
 function potTotal(room) {
-  return room.players.reduce(
-    (sum, p) => sum + p.totalBet,
-    0
-  );
+  return room.players.reduce((sum, p) => sum + p.totalBet, 0);
 }
 
 /* =========================
    SIDE POT SYSTEM
 ========================= */
-
-/*
-  Membentuk pot berdasarkan tingkat kontribusi.
-
-  Semua pemain yang memasukkan chip ikut menyumbang.
-  Hanya pemain yang tidak Fold dan memenuhi batas
-  kontribusi pot yang boleh memenangkan pot tersebut.
-*/
 
 function buildSidePots(room) {
   const levels = [
@@ -365,7 +331,6 @@ function buildSidePots(room) {
       type: pots.length === 0 ? "MAIN POT" : "SIDE POT " + pots.length,
       amount,
       cap: level,
-      contributorIds: contributors.map(p => p.id),
       eligibleIds: eligible.map(p => p.id),
       winners: [],
       winnerNames: []
@@ -376,9 +341,7 @@ function buildSidePots(room) {
 }
 
 function awardSidePots(room) {
-  const eligible = activePlayers(room);
-
-  const evaluated = eligible.map(player => {
+  const evaluated = activePlayers(room).map(player => {
     const result = evaluateSeven([
       ...player.hand,
       ...room.community
@@ -400,15 +363,7 @@ function awardSidePots(room) {
       player => pot.eligibleIds.includes(player.id)
     );
 
-    if (!contenders.length) {
-      /*
-        Kondisi khusus: jika tidak ada pemain aktif
-        yang memenuhi batas pot, jangan membagikan
-        pot kepada pemain yang tidak berhak.
-      */
-      pot.winnerNames = [];
-      continue;
-    }
+    if (!contenders.length) continue;
 
     contenders.sort((a, b) =>
       compareScores(b.score, a.score)
@@ -420,27 +375,19 @@ function awardSidePots(room) {
       compareScores(player.score, bestScore) === 0
     );
 
-    const share = Math.floor(
-      pot.amount / winners.length
-    );
-
+    const share = Math.floor(pot.amount / winners.length);
     let remainder = pot.amount % winners.length;
 
     winners.forEach(winner => {
-      const amount =
-        share + (remainder > 0 ? 1 : 0);
+      const amount = share + (remainder > 0 ? 1 : 0);
 
       if (remainder > 0) remainder--;
 
       const player = findPlayer(room, winner.id);
 
-      if (player) {
-        player.chips += amount;
-      }
+      if (player) player.chips += amount;
 
-      const existing = payouts.find(
-        item => item.id === winner.id
-      );
+      const existing = payouts.find(item => item.id === winner.id);
 
       if (existing) {
         existing.amount += amount;
@@ -473,18 +420,17 @@ function awardSidePots(room) {
     : [];
 
   return {
-    winnerNames: overallWinners.map(p => p.name),
+    winnerNames: [...new Set(pots.flatMap(p => p.winnerNames))],
 
     players: evaluated.map(player => ({
       id: player.id,
       name: player.name,
       handName: player.handName,
-      winner: overallWinners.some(
-        winner => winner.id === player.id
-      )
+      winner: overallWinners.some(w => w.id === player.id)
     })),
 
     payouts,
+
     pots: pots.map(pot => ({
       type: pot.type,
       amount: pot.amount,
@@ -548,7 +494,6 @@ function finishByFold(room) {
 
 function finishShowdown(room) {
   room.results = awardSidePots(room);
-
   room.stage = "showdown";
   room.currentPlayerId = null;
   room.pending.clear();
@@ -622,14 +567,47 @@ function advanceStreet(room) {
 }
 
 /* =========================
+   BIG BLIND OPENING
+========================= */
+
+function applyBigBlindOpening(room, player, action) {
+  if (!room.openingPending || player.id !== room.bigBlindId) {
+    return;
+  }
+
+  room.openingPending = false;
+
+  if (action !== "raise" && action !== "allin") {
+    return;
+  }
+
+  const smallBlind = findPlayer(room, room.smallBlindId);
+
+  if (!smallBlind || smallBlind.folded || smallBlind.chips <= 0) {
+    return;
+  }
+
+  const due = Math.max(
+    0,
+    room.currentBet - smallBlind.streetBet
+  );
+
+  if (due > 0) {
+    const paid = pay(smallBlind, due);
+
+    room.pending.delete(smallBlind.id);
+
+    room.message +=
+      " Small Blind otomatis Call " + paid + " chip.";
+  }
+}
+
+/* =========================
    PLAYER ACTIONS
 ========================= */
 
 function completeAction(room, player, action, raiseTo) {
-  if (
-    room.stage === "waiting" ||
-    room.stage === "showdown"
-  ) {
+  if (room.stage === "waiting" || room.stage === "showdown") {
     return "Ronde tidak sedang berlangsung.";
   }
 
@@ -637,7 +615,7 @@ function completeAction(room, player, action, raiseTo) {
     return "Belum giliranmu.";
   }
 
-  if (player.folded || player.chips < 0) {
+  if (player.folded || player.chips <= 0) {
     return "Aksi tidak tersedia.";
   }
 
@@ -670,16 +648,14 @@ function completeAction(room, player, action, raiseTo) {
     const paid = pay(player, due);
 
     room.pending.delete(player.id);
-
-    room.message =
-      player.name + " Call " + paid + " chip.";
+    room.message = player.name + " Call " + paid + " chip.";
   }
 
   else if (action === "raise") {
     const target = Math.floor(Number(raiseTo));
 
     if (!Number.isFinite(target) || target <= room.currentBet) {
-      return "Raise harus lebih besar dari taruhan saat ini.";
+      return "Nominal Raise harus lebih besar dari taruhan saat ini.";
     }
 
     const maximum = player.streetBet + player.chips;
@@ -693,6 +669,8 @@ function completeAction(room, player, action, raiseTo) {
     pay(player, paid);
 
     room.currentBet = target;
+
+    // Semua pemain aktif selain raiser harus mendapat giliran lagi.
     setPending(room, player.id);
 
     room.message =
@@ -700,16 +678,18 @@ function completeAction(room, player, action, raiseTo) {
   }
 
   else if (action === "allin") {
+    const target = player.streetBet + player.chips;
+
     if (player.chips <= 0) {
       return "Chip kamu sudah habis.";
     }
-
-    const target = player.streetBet + player.chips;
 
     pay(player, player.chips);
 
     if (target > room.currentBet) {
       room.currentBet = target;
+
+      // Semua pemain aktif lain harus merespons All-in.
       setPending(room, player.id);
     } else {
       room.pending.delete(player.id);
@@ -722,7 +702,20 @@ function completeAction(room, player, action, raiseTo) {
     return "Aksi tidak dikenal.";
   }
 
+  // Big Blind membuka taruhan terlebih dahulu.
+  // Jika BB Raise atau All-in, Small Blind otomatis Call.
+  applyBigBlindOpening(room, player, action);
+
   if (finishByFold(room)) return null;
+
+  // Pemain yang All-in tidak perlu bertindak.
+  // Jika hanya satu pemain yang masih bisa bertindak,
+  // seluruh kartu meja dibuka otomatis.
+  if (actionablePlayers(room).length <= 1) {
+    dealRemainingBoard(room);
+    finishShowdown(room);
+    return null;
+  }
 
   if (room.pending.size === 0) {
     advanceStreet(room);
@@ -745,6 +738,7 @@ function resetRound(room) {
   room.currentPlayerId = null;
   room.currentBet = 0;
   room.pending = new Set();
+  room.openingPending = false;
 
   room.smallBlindId = null;
   room.bigBlindId = null;
@@ -774,9 +768,9 @@ function sendUpdate(room) {
     currentPlayerId: room.currentPlayerId,
     currentBet: room.currentBet,
     pot,
-
     smallBlindId: room.smallBlindId,
     bigBlindId: room.bigBlindId,
+    openingPending: room.openingPending,
 
     players: room.players.map(p => ({
       id: p.id,
@@ -786,16 +780,12 @@ function sendUpdate(room) {
       streetBet: p.streetBet,
       totalBet: p.totalBet,
       folded: p.folded,
-      allIn:
-        p.chips === 0 &&
-        p.hand.length === 2 &&
-        !p.folded,
+      allIn: p.chips === 0 && p.hand.length === 2 && !p.folded,
       isTurn: p.id === room.currentPlayerId,
       isSmallBlind: p.id === room.smallBlindId,
       isBigBlind: p.id === room.bigBlindId,
       hasHand: p.hand.length === 2,
-      publicHand:
-        room.stage === "showdown" ? p.hand : null
+      publicHand: room.stage === "showdown" ? p.hand : null
     }))
   });
 
@@ -834,9 +824,7 @@ function removePlayer(socket) {
 
   if (!room) return;
 
-  room.players = room.players.filter(
-    p => p.id !== socket.id
-  );
+  room.players = room.players.filter(p => p.id !== socket.id);
 
   if (!room.players.length) {
     rooms.delete(code);
@@ -889,6 +877,7 @@ io.on("connection", socket => {
       currentPlayerId: null,
       currentBet: 0,
       pending: new Set(),
+      openingPending: false,
       smallBlindId: null,
       bigBlindId: null,
       blindCursor: 0,
@@ -913,10 +902,7 @@ io.on("connection", socket => {
   });
 
   socket.on("room:join", (data = {}, callback) => {
-    const code = String(data.code || "")
-      .trim()
-      .toUpperCase();
-
+    const code = String(data.code || "").trim().toUpperCase();
     const room = rooms.get(code);
 
     const fail = message => {
@@ -996,20 +982,13 @@ io.on("connection", socket => {
     sendUpdate(room);
   });
 
-  socket.on("dealer:start", amount => {
+  socket.on("dealer:start", () => {
     const room = getDealerRoom(socket);
 
     if (!room || room.stage !== "waiting") return;
 
     if (room.players.length < 2) {
       socket.emit("error:notice", "Minimal 2 pemain diperlukan.");
-      return;
-    }
-
-    const bbAmount = Math.floor(Number(amount));
-
-    if (!Number.isFinite(bbAmount) || bbAmount < 1) {
-      socket.emit("error:notice", "Big Blind minimal 1 chip.");
       return;
     }
 
@@ -1047,32 +1026,18 @@ io.on("connection", socket => {
     room.smallBlindId = sb.id;
     room.bigBlindId = bb.id;
 
-    const actualBB = Math.min(bbAmount, bb.chips);
-
-    pay(bb, actualBB);
-    room.currentBet = actualBB;
-
-    const sbDue = Math.max(0, actualBB - sb.streetBet);
-    pay(sb, sbDue);
-
-    room.stage = "preflop";
-
-    room.message =
-      "Big Blind " + bb.name +
-      " memasang " + actualBB +
-      " chip. Small Blind otomatis Call.";
+    // Tidak ada taruhan wajib dari dealer.
+    // Big Blind menentukan taruhan pembuka sendiri.
+    room.openingPending = true;
 
     room.blindCursor = (sbIndex + 1) % count;
 
     setPending(room);
 
-    const first = firstActor(room, room.pending);
-
-    if (!first) {
-      advanceStreet(room);
-    } else {
-      room.currentPlayerId = first.id;
-    }
+    room.currentPlayerId = bb.id;
+    room.message =
+      "Giliran Big Blind " + bb.name +
+      " untuk menentukan taruhan pembuka.";
 
     sendUpdate(room);
   });
@@ -1161,11 +1126,6 @@ io.on("connection", socket => {
   });
 });
 
-/* =========================
-   START SERVER
-========================= */
-
 server.listen(PORT, "0.0.0.0", () => {
   console.log("Joo Cards berjalan di port " + PORT);
 });
-
